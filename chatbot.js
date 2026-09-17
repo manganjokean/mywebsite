@@ -1,12 +1,11 @@
 /**
- * CyberBot // Sentinel-AI - Universal Cybersecurity & General AI Assistant
- * Complete standalone AI Chatbot with:
- * - Live generative AI engine capable of answering ANY random question
- * - Full contextual grounding in John Manganelli's cybersecurity portfolio & proposal
- * - Interactive phishing quiz engine (/quiz)
- * - Suspicious URL analyzer (/check <url>)
- * - Offline fallback heuristics
- * - Optional custom Google Gemini API Key support
+ * CyberBot // Sentinel-AI - Pure Conversational AI Chatbot
+ * Powered by live Generative AI:
+ * - Answers ANY question (science, tech, coding, math, history, jokes, general knowledge, etc.)
+ * - Grounded in John Manganelli's cybersecurity portfolio & PhishShield Academy proposal
+ * - Multi-turn conversational memory
+ * - Markdown & code syntax rendering
+ * - Offline heuristic fallback
  */
 
 (function () {
@@ -45,61 +44,24 @@
     }
   };
 
-  const SYSTEM_PROMPT = `You are CyberBot (Sentinel-AI), an intelligent, friendly AI assistant on John Manganelli's website for his IT Computer Security course (taught by Prof. Xiwang Guo).
+  const SYSTEM_PROMPT = `You are CyberBot (Sentinel-AI), a friendly, highly capable AI assistant on John Manganelli's website for his IT Computer Security course (taught by Prof. Xiwang Guo).
 
-Your capabilities:
-1. You can answer ANY question the user asks on ANY random topic—including general knowledge, science, mathematics, coding, history, gaming, music, pop culture, recipes, jokes, philosophical questions, or general conversation.
-2. You also have full knowledge of John Manganelli's portfolio and course project:
-   - Owner: John Manganelli (Senior majoring in Information Technology).
+YOUR INSTRUCTIONS:
+1. You are a REAL, conversational AI chatbot. You can talk freely and answer ANY question the user asks on ANY topic—including coding, math, general science, trivia, history, pop culture, advice, jokes, creative writing, or casual conversation.
+2. You also know everything about John Manganelli and his academic project:
+   - John Manganelli is a Senior majoring in Information Technology.
    - Course: IT Computer Security with Prof. Xiwang Guo.
-   - Homelab: Built an enterprise multi-node physical homelab server to test isolated virtual subnets, custom firewalls, and simulate defensive environments.
-   - Technical Skills: Linux (Kali, Ubuntu), Wireshark packet capture, Nmap port scanning, Python defensive scripting & log parsing, Bash, VirtualBox, Proxmox, and modern web development.
-   - Career Aspirations: Security Operations Center (SOC) Analyst or Incident Response Specialist.
-   - Hobbies: Playing guitar and fighting games.
-   - Project Proposal: "PhishShield Academy" — an interactive web sandbox for dissecting simulated phishing emails & URLs to improve detection rates.
-   - Privacy Policy: Intentionally withholds sensitive personal info (address, phone, SSN, passwords) to demonstrate real-world cyber hygiene against spear-phishing.
+   - Enterprise Homelab Server: Built a dedicated physical multi-node server to test isolated subnets, custom firewalls, and defense environments.
+   - Skills: Linux (Kali, Ubuntu), Wireshark, Nmap, Python defensive scripting & log parsing, Bash, VirtualBox, Proxmox.
+   - Career goal: SOC Analyst or Incident Response Specialist.
+   - Hobbies: Guitar and fighting games.
+   - Website Proposal: "PhishShield Academy" — interactive training sandbox for dissecting phishing emails & URLs.
+   - Privacy Policy: Intentionally omits PII (address, phone, SSN, passwords) to demonstrate good security hygiene.
+3. If the user asks you to quiz them or test them on cybersecurity, create a fun multiple-choice question directly in your text response and wait for their answer!
 
-Formatting Guidelines:
-- Answer random questions naturally, accurately, and comprehensively.
-- Format responses cleanly with markdown (bolding **text**, bulleted lists, code blocks when showing code).
-- Maintain a helpful, engaging, cyberpunk/technologist persona. Keep responses concise and easy to read.`;
-
-  // Pre-configured phishing quiz dataset
-  const QUIZ_QUESTIONS = [
-    {
-      question: "You receive an email: 'URGENT: Your Financial Aid was suspended. Click here to verify your identity within 2 hours: http://university-finaid-portal.xyz/login'. What is the biggest red flag?",
-      options: [
-        "The email comes from financial aid",
-        "Artificial urgency & suspicious non-university domain (.xyz)",
-        "The subject line uses capital letters",
-        "It asks you to verify identity"
-      ],
-      correctIndex: 1,
-      explanation: "Scammers use artificial urgency ('within 2 hours') and deceptive domain names (lookalike .xyz domain rather than the official .edu domain) to panic victims into submitting credentials."
-    },
-    {
-      question: "Which of the following URLs is a deceptive homoglyph / spoofed domain?",
-      options: [
-        "https://www.paypal.com/signin",
-        "https://login.microsoftonline.com",
-        "https://www.paypaI.com/account-update (with capital 'i' replacing 'l')",
-        "https://support.google.com/accounts"
-      ],
-      correctIndex: 2,
-      explanation: "Domain homoglyphs substitute characters with visually similar letters (e.g. uppercase 'I' for lowercase 'l' or Cyrillic characters) to deceive users."
-    },
-    {
-      question: "Why is Multi-Factor Authentication (MFA) using an Authenticator App significantly safer than SMS-based MFA?",
-      options: [
-        "Authenticator apps work without cellular signal and are immune to SIM-swapping",
-        "SMS texts use more phone battery",
-        "Authenticator apps do not need passwords",
-        "SMS messages are always blocked by firewalls"
-      ],
-      correctIndex: 0,
-      explanation: "SMS messages travel over unencrypted cellular networks and are vulnerable to SIM-swapping and SS7 interception. Time-based One-Time Password (TOTP) authenticator apps generate offline cryptographic tokens that attackers cannot reroute."
-    }
-  ];
+FORMATTING:
+- Use clean Markdown (**bold**, *italic*, bullet points, \`inline code\`, and \`\`\`code blocks\`\`\`).
+- Keep your tone sharp, helpful, and friendly.`;
 
   // =========================================================================
   // 2. CHATBOT STATE & MULTI-TURN HISTORY
@@ -108,11 +70,8 @@ Formatting Guidelines:
   let chatOpen = false;
   let isExpanded = false;
   let isAudioMuted = true;
-  let activeQuiz = null;
-  let quizStep = 0;
-  let quizScore = 0;
 
-  // Multi-turn conversation memory (last 8 turns)
+  // Multi-turn conversation memory
   const conversationHistory = [];
 
   // Local storage keys
@@ -134,7 +93,7 @@ Formatting Guidelines:
       osc.start();
       osc.stop(audioCtx.currentTime + duration);
     } catch (e) {
-      // AudioContext unavailable or restricted
+      // AudioContext unavailable
     }
   }
 
@@ -232,14 +191,14 @@ Formatting Guidelines:
   }
 
   // =========================================================================
-  // 4. LIVE AI API INTEGRATION (ANY QUESTION)
+  // 4. LIVE GENERATIVE AI (ANSWERS ANY RANDOM QUESTION)
   // =========================================================================
 
   // Free high-speed AI inference (Pollinations) - No key required, CORS enabled
   async function callFreeAI(prompt) {
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
-      ...conversationHistory.slice(-6),
+      ...conversationHistory.slice(-8),
       { role: "user", content: prompt }
     ];
 
@@ -299,268 +258,60 @@ Formatting Guidelines:
   }
 
   // =========================================================================
-  // 5. LOCAL HEURISTICS & INTENT FALLBACK ENGINE
+  // 5. LOCAL BACKUP HEURISTICS (IF OFFLINE)
   // =========================================================================
 
-  function generateLocalResponse(rawQuery) {
+  function generateOfflineBackup(rawQuery) {
     const q = rawQuery.toLowerCase().trim();
 
-    // 1. Phishing Quiz command
-    if (q.includes('/quiz') || q.includes('quiz me') || q.includes('phishing quiz') || q.includes('start quiz') || q.includes('test me')) {
-      startQuiz();
-      return null;
+    if (q.includes('who is john') || q.includes('about john') || q.includes('who are you') || q.includes('introduce')) {
+      return `<strong>John Manganelli</strong> is a <strong>Senior</strong> majoring in <strong>Information Technology</strong>, enrolled in <em>IT Computer Security</em> under <strong>${SITE_DATA.instructor}</strong>.<br><br>He has a passion for network engineering, Linux, defensive scripting, and homelab servers.`;
     }
 
-    // 2. URL Checker / Inspector
-    if (q.startsWith('/check') || q.includes('http://') || q.includes('https://') || q.includes('.xyz') || q.includes('.ru') || q.includes('.tk') || q.includes('is this url safe')) {
-      return analyzeURL(rawQuery);
+    if (q.includes('fact') || q.includes('homelab') || q.includes('server')) {
+      return `<strong>John's Homelab Fact:</strong><br>${SITE_DATA.homelabFact}`;
     }
 
-    // 3. Identity & Background
-    if (q.includes('who is john') || q.includes('tell me about john') || q.includes('about john') || q.includes('who are you') || q.includes('introduce')) {
-      return `<strong>John Manganelli</strong> is a <strong>Senior</strong> majoring in <strong>Information Technology</strong>. He is currently enrolled in <em>IT Computer Security</em> taught by <strong>${SITE_DATA.instructor}</strong>.<br><br>He is passionate about programming, homelab infrastructure, network engineering, and cybersecurity defenses.`;
-    }
-
-    // 4. Interesting Fact / Homelab
-    if (q.includes('fact') || q.includes('interesting') || q.includes('homelab') || q.includes('server') || q.includes('hardware')) {
-      return `<strong>Interesting Fact About John:</strong><br>${SITE_DATA.homelabFact}<br><br>This setup allows him to experiment safely with firewalls, network routing, and threat isolation!`;
-    }
-
-    // 5. Skills & Tools
-    if (q.includes('skill') || q.includes('tool') || q.includes('technolog') || q.includes('wireshark') || q.includes('nmap') || q.includes('kali') || q.includes('linux') || q.includes('python')) {
-      return `<strong>John's Core Technical Skills:</strong>
+    if (q.includes('skill') || q.includes('tool') || q.includes('wireshark') || q.includes('nmap') || q.includes('linux')) {
+      return `<strong>John's Technical Skills:</strong>
       <ul>
-        <li><strong>Operating Systems:</strong> Linux (Ubuntu, Kali Linux), command line (<code>bash</code>, <code>ssh</code>, <code>git</code>).</li>
-        <li><strong>Defensive Tools:</strong> Wireshark (packet inspection & TLS analysis), Nmap (port scanning & service discovery).</li>
-        <li><strong>Scripting & Code:</strong> Python (defensive log parsing & automation), Bash, modern HTML/CSS.</li>
-        <li><strong>Infrastructure:</strong> VirtualBox & Proxmox hypervisors for testing isolated subnets.</li>
-      </ul>
-      He is currently focusing on improving his <strong>automated defensive Python scripting</strong> and <strong>web vulnerability analysis</strong>!`;
-    }
-
-    // 6. Career Goals
-    if (q.includes('career') || q.includes('job') || q.includes('future') || q.includes('soc') || q.includes('incident response') || q.includes('goals')) {
-      return `<strong>Career Aspirations:</strong><br>John is preparing for roles such as a <strong>Security Operations Center (SOC) Analyst</strong> or an <strong>Incident Response Specialist</strong>.<br><br>His goal is to monitor network perimeters, detect unauthorized intrusions, investigate threat alerts, and contain attacks before organizations suffer data breaches.`;
-    }
-
-    // 7. Hobbies
-    if (q.includes('hobb') || q.includes('music') || q.includes('guitar') || q.includes('game') || q.includes('gaming') || q.includes('free time')) {
-      return `When John isn't configuring firewalls or studying security, his favorite hobbies include:
-      <ul>
-        <li><strong>Music:</strong> Playing guitar 🎸</li>
-        <li><strong>Gaming:</strong> Competitive fighting games 🎮</li>
+        <li><strong>Systems:</strong> Linux (Ubuntu, Kali Linux), Bash terminal.</li>
+        <li><strong>Defensive Tools:</strong> Wireshark (packet analysis), Nmap (port scanning).</li>
+        <li><strong>Scripting:</strong> Python for automated log parsing & defense, HTML/CSS.</li>
+        <li><strong>Virtualization:</strong> Proxmox and VirtualBox isolated test environments.</li>
       </ul>`;
     }
 
-    // 8. Privacy Requirement
-    if (q.includes('privacy') || q.includes('withheld') || q.includes('pii') || q.includes('address') || q.includes('phone') || q.includes('ssn') || q.includes('password')) {
-      return `<strong>Mandatory Privacy Implementation:</strong><br>${SITE_DATA.privacyPolicy}<br><br>
-      Strictly withheld elements:
-      <ul>
-        <li>Home address & phone number</li>
-        <li>Student ID & Social Security number</li>
-        <li>Passwords & financial / banking details</li>
-      </ul>
-      Practicing good cyber hygiene starts with limiting public personal data exposure!`;
+    if (q.includes('career') || q.includes('job') || q.includes('soc')) {
+      return `<strong>Career Goals:</strong><br>John is preparing for roles as a <strong>Security Operations Center (SOC) Analyst</strong> or <strong>Incident Response Specialist</strong>.`;
     }
 
-    // 9. Specific Deliverables (D1 - D7)
-    if (q.includes('deliverable 1') || q.includes('d1') || q.includes('concept')) {
-      return `<strong>${SITE_DATA.proposal.deliverables.d1}</strong>`;
-    }
-    if (q.includes('deliverable 2') || q.includes('d2') || q.includes('target users') || q.includes('audience')) {
-      return `<strong>${SITE_DATA.proposal.deliverables.d2}</strong>`;
-    }
-    if (q.includes('deliverable 3') || q.includes('d3') || q.includes('functional')) {
-      return `<strong>${SITE_DATA.proposal.deliverables.d3}</strong>`;
-    }
-    if (q.includes('deliverable 4') || q.includes('d4') || q.includes('security requirement')) {
-      return `<strong>${SITE_DATA.proposal.deliverables.d4}</strong>`;
-    }
-    if (q.includes('deliverable 5') || q.includes('d5') || q.includes('threat') || q.includes('mitigation')) {
-      return `<strong>${SITE_DATA.proposal.deliverables.d5}</strong>`;
-    }
-    if (q.includes('deliverable 6') || q.includes('d6') || q.includes('research question')) {
-      return `<strong>${SITE_DATA.proposal.deliverables.d6}</strong>`;
-    }
-    if (q.includes('deliverable 7') || q.includes('d7') || q.includes('objective')) {
-      return `<strong>${SITE_DATA.proposal.deliverables.d7}</strong>`;
+    if (q.includes('hobb') || q.includes('guitar') || q.includes('game')) {
+      return `John's hobbies include playing <strong>guitar</strong> 🎸 and competitive <strong>fighting games</strong> 🎮!`;
     }
 
-    // 10. General Project Proposal / PhishShield Academy
-    if (q.includes('proposal') || q.includes('phishshield') || q.includes('project') || q.includes('deliverable') || q.includes('assignment 1')) {
-      return `<strong>Project Proposal: &ldquo;${SITE_DATA.proposal.name}&rdquo;</strong>
-      <p>${SITE_DATA.proposal.concept}</p>
-      <strong>Key Deliverables:</strong>
+    if (q.includes('proposal') || q.includes('phishshield')) {
+      return `<strong>Project Proposal: &ldquo;${SITE_DATA.proposal.name}&rdquo;</strong><br>${SITE_DATA.proposal.concept}<br><br>Addresses phishing and credential theft by providing interactive email and URL sandboxes.`;
+    }
+
+    if (q.includes('cia') || q.includes('triad')) {
+      return `<strong>The CIA Triad:</strong>
       <ul>
-        <li><strong>Problem:</strong> ${SITE_DATA.proposal.problem}</li>
-        <li><strong>Target Audience:</strong> ${SITE_DATA.proposal.targetUsers}</li>
-        <li><strong>Key Features:</strong> Interactive email sandbox, lookalike URL decoder, scenario quizzes, and MFA defense simulations.</li>
-        <li><strong>Security Architecture:</strong> Zero credential storage, strict XSS sanitization, and TLS 1.3 client isolation.</li>
+        <li><strong>Confidentiality:</strong> Preventing unauthorized access (encryption, access controls).</li>
+        <li><strong>Integrity:</strong> Ensuring information cannot be tampered with (hashing, digital signatures).</li>
+        <li><strong>Availability:</strong> Ensuring authorized users have reliable access (redundancy, DDoS defenses).</li>
       </ul>`;
     }
 
-    // 11. Cybersecurity Concepts: CIA Triad
-    if (q.includes('cia') || q.includes('triad') || q.includes('confidentiality')) {
-      return `<strong>The CIA Triad: Core Pillars of Cybersecurity</strong>
-      <ul>
-        <li><strong>Confidentiality:</strong> Safeguarding sensitive information from unauthorized eyes (via encryption, access controls, MFA).</li>
-        <li><strong>Integrity:</strong> Guaranteeing data cannot be tampered with or corrupted (via hashing, digital signatures, audit logs).</li>
-        <li><strong>Availability:</strong> Ensuring authorized users have reliable, uninterrupted access to systems (via redundancy, backups, DDoS defenses).</li>
-      </ul>`;
+    if (q.includes('joke')) {
+      return `Why do security engineers love coffee?<br><em>Because it prevents buffer underflows!</em> ☕`;
     }
 
-    // 12. MFA & Passwords
-    if (q.includes('mfa') || q.includes('multi-factor') || q.includes('two-factor') || q.includes('2fa') || q.includes('password')) {
-      return `<strong>Multi-Factor Authentication (MFA) Best Practices:</strong>
-      <br>John practices daily MFA enforcement using a dedicated <strong>Authenticator App</strong> (Time-based One-Time Passwords / TOTP) rather than SMS, protecting against SIM-swapping.
-      <br><br>He also utilizes a password manager with <strong>16+ character unique passphrases</strong> for every service to neutralize credential stuffing attacks.`;
-    }
-
-    // 13. Phishing Detection Tips
-    if (q.includes('phish') || q.includes('spear-phishing') || q.includes('email red flag') || q.includes('how to spot')) {
-      return `<strong>Top Phishing Red Flags to Watch For:</strong>
-      <ol>
-        <li><strong>Artificial Urgency:</strong> Demands like "Act within 24 hours or account deleted!".</li>
-        <li><strong>Lookalike Domain:</strong> Domains like <code>security-paypal.net</code> or <code>university.edu.xyz</code> instead of official sites.</li>
-        <li><strong>Generic Greetings:</strong> "Dear Valued Customer" rather than your real name.</li>
-        <li><strong>Hidden Hyperlinks:</strong> Link text saying one URL while pointing to another. (Always hover before clicking!).</li>
-        <li><strong>Unsolicited Attachments:</strong> Invoices or ZIP files containing macros or ransomware.</li>
-      </ol>
-      Tip: Type <code>/quiz</code> to test your phishing detection skills!`;
-    }
-
-    // 14. Course & Professor
-    if (q.includes('professor') || q.includes('guo') || q.includes('xiwang') || q.includes('course') || q.includes('class')) {
-      return `This website and proposal were created for <strong>IT Computer Security</strong> taught by <strong>Prof. Xiwang Guo</strong>. The course explores core principles of cyber defense, vulnerability analysis, and network security.`;
-    }
-
-    // 15. General Fallback
-    return `I am CyberBot! You can ask me <strong>ANY random question</strong> (science, jokes, coding, math, general questions) or ask about John Manganelli's cybersecurity portfolio and project proposal. Type <code>/quiz</code> to test your phishing skills!`;
-  }
-
-  // URL Phishing Analyzer
-  function analyzeURL(rawText) {
-    const urlMatch = rawText.match(/(https?:\/\/[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s]*)/i);
-    const target = urlMatch ? urlMatch[0] : rawText.replace('/check', '').trim();
-
-    if (!target) {
-      return "Please provide a URL to analyze, for example: <code>/check http://secure-login-bank.xyz/portal</code>";
-    }
-
-    const issues = [];
-    const lower = target.toLowerCase();
-
-    if (lower.startsWith('http://')) {
-      issues.push("⚠️ <strong>Unencrypted HTTP:</strong> Insecure protocol transmission.");
-    }
-    if (/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(lower)) {
-      issues.push("🚨 <strong>Raw IP Address:</strong> Authentic organizations rarely direct users to numeric IP addresses.");
-    }
-    if (lower.includes('.xyz') || lower.includes('.top') || lower.includes('.work') || lower.includes('.cc') || lower.includes('.tk')) {
-      issues.push("⚠️ <strong>High-Risk TLD:</strong> TLD is frequently utilized in disposable credential-harvesting schemes.");
-    }
-    if (lower.includes('login') || lower.includes('verify') || lower.includes('account') || lower.includes('update') || lower.includes('secure')) {
-      if (!lower.includes('.edu') && !lower.includes('.gov')) {
-        issues.push("🔍 <strong>Deceptive Keywords:</strong> Contains typical credential-harvesting triggers (login/verify/update).");
-      }
-    }
-    if (lower.includes('@')) {
-      issues.push("🚨 <strong>Embedded Credential / Hostname Spoof:</strong> Contains '@' character used to obscure true destination.");
-    }
-    if (lower.split('.').length > 4) {
-      issues.push("⚠️ <strong>Excessive Subdomains:</strong> Phishers often stack subdomains (e.g. <code>paypal.com.verify.attacker.com</code>).");
-    }
-
-    if (issues.length === 0) {
-      return `<strong>URL Safety Inspection:</strong> <code>${escapeHtml(target)}</code><br><br>
-      ✅ <strong>No immediate obvious heuristics detected.</strong> Always confirm TLS certificates and rely on verified bookmarks before entering credentials!`;
-    } else {
-      return `<strong>Phishing Threat Analysis for:</strong> <code>${escapeHtml(target)}</code><br><br>
-      Found <strong>${issues.length} Red Flag(s)</strong>:
-      <ul>${issues.map(i => `<li>${i}</li>`).join('')}</ul>
-      <strong>Recommendation:</strong> 🛑 <em>Do NOT enter credentials or download attachments from this URL.</em>`;
-    }
+    return `I am CyberBot! You can ask me any question about cybersecurity, coding, general topics, or John's portfolio.`;
   }
 
   // =========================================================================
-  // 6. INTERACTIVE QUIZ ENGINE
-  // =========================================================================
-
-  function startQuiz() {
-    activeQuiz = QUIZ_QUESTIONS;
-    quizStep = 0;
-    quizScore = 0;
-    appendBotMessage(`🎯 <strong>Phishing Detection Challenge Initiated!</strong><br>Answer 3 practical questions to evaluate your ability to spot social engineering attacks.`);
-    renderCurrentQuizStep();
-  }
-
-  function renderCurrentQuizStep() {
-    if (!activeQuiz || quizStep >= activeQuiz.length) {
-      const finalMsg = `🏆 <strong>Quiz Complete!</strong><br>Your Detection Score: <strong>${quizScore} / ${activeQuiz.length}</strong> (${Math.round((quizScore / activeQuiz.length) * 100)}%).<br><br>` +
-        (quizScore === activeQuiz.length
-          ? "🌟 <em>Outstanding! You have sharp threat detection intuition!</em>"
-          : "💡 <em>Good effort! Practical simulations like <strong>PhishShield Academy</strong> help build this intuition quickly.</em>") +
-        `<br><br>Type <code>/quiz</code> to test yourself again.`;
-      activeQuiz = null;
-      appendBotMessage(finalMsg);
-      return;
-    }
-
-    const item = activeQuiz[quizStep];
-    const qNum = quizStep + 1;
-
-    let html = `<strong>Question ${qNum} of ${activeQuiz.length}:</strong><br>${item.question}`;
-    html += `<div class="chat-quiz-box"><div class="quiz-options-list">`;
-    item.options.forEach((opt, idx) => {
-      html += `<button class="quiz-option-btn" data-opt-idx="${idx}">${escapeHtml(opt)}</button>`;
-    });
-    html += `</div></div>`;
-
-    appendBotMessage(html);
-
-    const msgList = document.getElementById('chat-messages');
-    const lastMsg = msgList.lastElementChild;
-    const buttons = lastMsg.querySelectorAll('.quiz-option-btn');
-    buttons.forEach(btn => {
-      btn.addEventListener('click', function () {
-        const selectedIdx = parseInt(this.getAttribute('data-opt-idx'), 10);
-        handleQuizAnswer(selectedIdx, buttons);
-      });
-    });
-  }
-
-  function handleQuizAnswer(selectedIdx, buttons) {
-    if (!activeQuiz) return;
-    const item = activeQuiz[quizStep];
-
-    buttons.forEach((btn, idx) => {
-      btn.disabled = true;
-      if (idx === item.correctIndex) {
-        btn.classList.add('correct');
-      } else if (idx === selectedIdx) {
-        btn.classList.add('incorrect');
-      }
-    });
-
-    const isCorrect = selectedIdx === item.correctIndex;
-    if (isCorrect) {
-      quizScore++;
-      playCyberBeep(1200, 'sine', 0.1);
-      appendBotMessage(`✅ <strong>Correct!</strong> ${item.explanation}`);
-    } else {
-      playCyberBeep(300, 'sawtooth', 0.15);
-      appendBotMessage(`❌ <strong>Incorrect.</strong> ${item.explanation}`);
-    }
-
-    quizStep++;
-    setTimeout(() => {
-      renderCurrentQuizStep();
-    }, 1200);
-  }
-
-  // =========================================================================
-  // 7. DOM UI CREATION & EVENT LISTENERS
+  // 6. DOM UI CREATION & EVENT LISTENERS
   // =========================================================================
 
   function escapeHtml(str) {
@@ -636,27 +387,9 @@ Formatting Guidelines:
     appendUserMessage(text);
     showTyping(true);
 
-    const qLower = text.toLowerCase();
-
-    // Direct local command: Quiz
-    if (qLower === '/quiz' || qLower === 'quiz' || qLower === 'start quiz' || qLower === 'phishing quiz') {
-      showTyping(false);
-      startQuiz();
-      return;
-    }
-
-    // Direct local command: URL checker
-    if (text.startsWith('/check ') || (text.startsWith('http') && text.includes('://'))) {
-      showTyping(false);
-      const urlReport = analyzeURL(text);
-      appendBotMessage(urlReport);
-      return;
-    }
-
-    // Try Live Generative AI (Answers ANY random question!)
     let aiResponse = null;
 
-    // Check if custom Gemini API Key exists
+    // 1. Try custom Gemini API Key if configured
     const apiKey = localStorage.getItem(STORAGE_KEY_API_KEY) || sessionStorage.getItem(STORAGE_KEY_API_KEY);
     if (apiKey) {
       try {
@@ -666,12 +399,12 @@ Formatting Guidelines:
       }
     }
 
-    // If no custom key or if it failed, use the universal free AI endpoint
+    // 2. If no custom key or failed, call universal live AI
     if (!aiResponse) {
       try {
         aiResponse = await callFreeAI(text);
       } catch (err) {
-        console.warn("Free AI endpoint call failed (offline or network error):", err);
+        console.warn("Universal AI call failed (offline or network error):", err);
       }
     }
 
@@ -687,10 +420,8 @@ Formatting Guidelines:
       appendBotMessage(renderMarkdown(aiResponse));
     } else {
       // Offline fallback: Use local heuristics engine
-      const localReply = generateLocalResponse(text);
-      if (localReply) {
-        appendBotMessage(localReply);
-      }
+      const localReply = generateOfflineBackup(text);
+      appendBotMessage(localReply);
     }
   }
 
@@ -737,11 +468,11 @@ Formatting Guidelines:
     if (!list) return;
     list.innerHTML = '';
     conversationHistory.length = 0;
-    appendBotMessage(`Terminal cleared. Ready for any question!<br><br>💡 <em>Ask me anything about cybersecurity, programming, general topics, or type <code>/quiz</code>!</em>`);
+    appendBotMessage(`Terminal cleared. Ready for your questions! Type anything you'd like to ask.`);
   }
 
   // =========================================================================
-  // 8. INITIALIZATION
+  // 7. INITIALIZATION
   // =========================================================================
 
   function initChatbot() {
@@ -825,7 +556,7 @@ Formatting Guidelines:
         const keyVal = apiKeyInput.value.trim();
         if (keyVal) {
           sessionStorage.setItem(STORAGE_KEY_API_KEY, keyVal);
-          appendBotMessage(`🔑 <strong>Custom Gemini Key Configured!</strong> CyberBot is now using your custom Gemini API model.`);
+          appendBotMessage(`🔑 <strong>Custom Gemini Key Configured!</strong> CyberBot is now using your custom Gemini API key.`);
         } else {
           sessionStorage.removeItem(STORAGE_KEY_API_KEY);
           localStorage.removeItem(STORAGE_KEY_API_KEY);
@@ -859,8 +590,8 @@ Formatting Guidelines:
     // Initial greeting in message stream
     appendBotMessage(
       `<strong>System Online.</strong> Welcome to CyberBot!<br><br>` +
-      `You can ask me <strong>ANY random question</strong>—from coding and cybersecurity to science, history, trivia, or jokes.<br><br>` +
-      `💡 <em>Try asking something random, or click any prompt chip below!</em>`
+      `I am a conversational AI assistant. You can ask me <strong>ANY random question</strong> (science, coding, math, history, jokes, pop culture) or anything about John Manganelli's cybersecurity portfolio.<br><br>` +
+      `💡 <em>Type any question below, or click any suggestion chip to get started!</em>`
     );
   }
 

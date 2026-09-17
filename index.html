@@ -6,7 +6,7 @@
   <meta name="description" content="John Manganelli - Assignment 1: Cybersecurity Problem & Website Proposal. Complete 4-page submission and proposal deliverables for IT Computer Security.">
   <title>John Manganelli | Assignment 1 - Cybersecurity Problem & Website Proposal</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="chatbot.css">
+  <link rel="stylesheet" href="chatbot.css?v=3.0">
 </head>
 <body>
   <!-- Background Matrix Digital Rain Canvas -->
@@ -575,17 +575,17 @@
 
         <!-- Suggestion Chips -->
         <div id="chat-suggestions" class="chat-suggestions" aria-label="Suggested questions">
-          <button type="button" class="suggestion-chip" data-query="Tell me a joke">😄 Tell me a joke</button>
-          <button type="button" class="suggestion-chip" data-query="Tell me about John">🎓 About John</button>
+          <button type="button" class="suggestion-chip" data-query="👋 What can you help me with?">👋 Help</button>
+          <button type="button" class="suggestion-chip" data-query="Tell me about John Manganelli">🎓 About John</button>
           <button type="button" class="suggestion-chip" data-query="What is PhishShield Academy?">🛡️ PhishShield</button>
-          <button type="button" class="suggestion-chip" data-query="How does public key encryption work?">🔐 How Encryption Works</button>
-          <button type="button" class="suggestion-chip" data-query="/quiz">🎯 Phishing Quiz</button>
-          <button type="button" class="suggestion-chip" data-query="Write a quick Python port scanner script">🐍 Python Script</button>
+          <button type="button" class="suggestion-chip" data-query="What technical skills does John have?">💻 Skills</button>
+          <button type="button" class="suggestion-chip" data-query="Explain the CIA Triad in cybersecurity">🔐 CIA Triad</button>
+          <button type="button" class="suggestion-chip" data-query="Tell me a joke">😄 Joke</button>
         </div>
 
         <!-- Input Bar -->
         <div class="chat-input-bar">
-          <input type="text" id="chat-input" class="chat-input" placeholder="Ask me literally ANY question (or /quiz)..." aria-label="Message CyberBot">
+          <input type="text" id="chat-input" class="chat-input" placeholder="Ask me anything..." aria-label="Message CyberBot">
           <button type="button" id="chat-send-btn" class="chat-send-btn" aria-label="Send message">&#x27A4;</button>
         </div>
       </div>
@@ -594,8 +594,8 @@
       <div id="chat-settings-modal" class="chat-settings-modal is-hidden" aria-label="AI Configuration Panel">
         <h4 class="settings-heading">&#x2699;&#xFE0F; AI Engine Settings</h4>
         <p class="settings-description">
-          By default, CyberBot uses a local offline cybersecurity knowledge base and quiz engine.
-          Optionally provide a <strong>Google Gemini API Key</strong> to enable live generative AI responses.
+          CyberBot uses a live AI conversational engine.
+          Optionally provide a <strong>Google Gemini API Key</strong> to use your personal Gemini model.
         </p>
         <div>
           <label for="chat-api-key-input" class="settings-label">Gemini API Key (Optional):</label>
@@ -615,8 +615,8 @@
 
   <!-- Matrix Digital Rain Animation Script -->
   <script src="matrix.js"></script>
-  <!-- CyberBot AI Chatbot Script -->
-  <script src="chatbot.js"></script>
+  <!-- CyberBot AI Chatbot Script (v3.0) -->
+  <script src="chatbot.js?v=3.0"></script>
 
   <!-- Project Download Bar -->
   <div class="download-all" style="text-align:center;padding:1.5rem;">

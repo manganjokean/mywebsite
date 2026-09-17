@@ -195,6 +195,7 @@ FORMATTING:
   // =========================================================================
 
   // Free high-speed AI inference (Pollinations) - No key required, CORS enabled
+  // Enhanced error handling and rate‑limit management
   async function callFreeAI(prompt) {
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
@@ -217,8 +218,30 @@ FORMATTING:
 
     clearTimeout(timeoutId);
 
+    // Check for HTTP errors (e.g., 429 Too Many Requests)
     if (!resp.ok) {
-      throw new Error(`AI service responded with status: ${resp.status}`);
+      // Attempt to read JSON error payload if available
+      let errorInfo = null;
+      try {
+        const json = await resp.json();
+        errorInfo = json.error?.message || json.message || JSON.stringify(json);
+      } catch (_) {
+        // Not JSON – fall back to raw text
+        errorInfo = await resp.text();
+      }
+      throw new Error(`AI service error (${resp.status}): ${errorInfo}`);
+    }
+
+    // Some 200 responses may still contain a JSON error object (certain rate‑limit implementations)
+    const contentType = resp.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const json = await resp.json();
+      if (json.error || json.message) {
+        const msg = json.error?.message || json.message;
+        throw new Error(`AI service returned error payload: ${msg}`);
+      }
+      // If JSON looks like a proper answer (unlikely), fall back to string conversion
+      return JSON.stringify(json).trim();
     }
 
     const text = await resp.text();
@@ -377,15 +400,26 @@ FORMATTING:
     if (list) list.scrollTop = list.scrollHeight;
   }
 
+  // Request throttling state
+  let isRequestInFlight = false;
+  const pendingPrompts = [];
+
   async function handleSend() {
     const input = document.getElementById('chat-input');
     if (!input) return;
     const text = input.value.trim();
     if (!text) return;
 
+    // Enqueue if a request is already processing
+    if (isRequestInFlight) {
+      pendingPrompts.push(text);
+      return;
+    }
+
     input.value = '';
     appendUserMessage(text);
     showTyping(true);
+    isRequestInFlight = true;
 
     let aiResponse = null;
 
@@ -395,7 +429,7 @@ FORMATTING:
       try {
         aiResponse = await callGeminiAPI(apiKey, text);
       } catch (err) {
-        console.warn("Custom Gemini API call failed, falling back to default AI engine:", err);
+        console.warn('Custom Gemini API call failed, falling back to default AI engine:', err);
       }
     }
 
@@ -404,7 +438,7 @@ FORMATTING:
       try {
         aiResponse = await callFreeAI(text);
       } catch (err) {
-        console.warn("Universal AI call failed (offline or network error):", err);
+        console.warn('Universal AI call failed (offline or network error):', err);
       }
     }
 
@@ -412,8 +446,8 @@ FORMATTING:
 
     if (aiResponse) {
       // Record conversation history
-      conversationHistory.push({ role: "user", content: text });
-      conversationHistory.push({ role: "assistant", content: aiResponse });
+      conversationHistory.push({ role: 'user', content: text });
+      conversationHistory.push({ role: 'assistant', content: aiResponse });
       if (conversationHistory.length > 12) conversationHistory.splice(0, 2);
 
       // Render markdown response
@@ -422,6 +456,20 @@ FORMATTING:
       // Offline fallback: Use local heuristics engine
       const localReply = generateOfflineBackup(text);
       appendBotMessage(localReply);
+    }
+
+    isRequestInFlight = false;
+    // Process next queued prompt if any
+    if (pendingPrompts.length > 0) {
+      const nextText = pendingPrompts.shift();
+      // Simulate sending as if user typed it
+      // Directly invoke the same logic without re-reading input
+      // We reuse the same flow by calling an internal helper
+      // For simplicity, set the input value and recurse
+      const fakeInput = document.getElementById('chat-input');
+      if (fakeInput) fakeInput.value = nextText;
+      // Call handleSend again (will process immediately as isRequestInFlight is false now)
+      handleSend();
     }
   }
 

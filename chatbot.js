@@ -1,14 +1,19 @@
 /**
- * CyberBot // Sentinel-AI - Cybersecurity Portfolio Assistant
- * Complete standalone AI Chatbot with local cybersecurity knowledge base,
- * interactive phishing quiz engine, URL safety analyzer, and optional live Gemini API support.
+ * CyberBot // Sentinel-AI - Universal Cybersecurity & General AI Assistant
+ * Complete standalone AI Chatbot with:
+ * - Live generative AI engine capable of answering ANY random question
+ * - Full contextual grounding in John Manganelli's cybersecurity portfolio & proposal
+ * - Interactive phishing quiz engine (/quiz)
+ * - Suspicious URL analyzer (/check <url>)
+ * - Offline fallback heuristics
+ * - Optional custom Google Gemini API Key support
  */
 
 (function () {
   'use strict';
 
   // =========================================================================
-  // 1. KNOWLEDGE BASE & INTENT ENGINE
+  // 1. SITE & PORTFOLIO KNOWLEDGE BASE
   // =========================================================================
 
   const SITE_DATA = {
@@ -39,6 +44,25 @@
       }
     }
   };
+
+  const SYSTEM_PROMPT = `You are CyberBot (Sentinel-AI), an intelligent, friendly AI assistant on John Manganelli's website for his IT Computer Security course (taught by Prof. Xiwang Guo).
+
+Your capabilities:
+1. You can answer ANY question the user asks on ANY random topic—including general knowledge, science, mathematics, coding, history, gaming, music, pop culture, recipes, jokes, philosophical questions, or general conversation.
+2. You also have full knowledge of John Manganelli's portfolio and course project:
+   - Owner: John Manganelli (Senior majoring in Information Technology).
+   - Course: IT Computer Security with Prof. Xiwang Guo.
+   - Homelab: Built an enterprise multi-node physical homelab server to test isolated virtual subnets, custom firewalls, and simulate defensive environments.
+   - Technical Skills: Linux (Kali, Ubuntu), Wireshark packet capture, Nmap port scanning, Python defensive scripting & log parsing, Bash, VirtualBox, Proxmox, and modern web development.
+   - Career Aspirations: Security Operations Center (SOC) Analyst or Incident Response Specialist.
+   - Hobbies: Playing guitar and fighting games.
+   - Project Proposal: "PhishShield Academy" — an interactive web sandbox for dissecting simulated phishing emails & URLs to improve detection rates.
+   - Privacy Policy: Intentionally withholds sensitive personal info (address, phone, SSN, passwords) to demonstrate real-world cyber hygiene against spear-phishing.
+
+Formatting Guidelines:
+- Answer random questions naturally, accurately, and comprehensively.
+- Format responses cleanly with markdown (bolding **text**, bulleted lists, code blocks when showing code).
+- Maintain a helpful, engaging, cyberpunk/technologist persona. Keep responses concise and easy to read.`;
 
   // Pre-configured phishing quiz dataset
   const QUIZ_QUESTIONS = [
@@ -78,7 +102,7 @@
   ];
 
   // =========================================================================
-  // 2. CHATBOT STATE
+  // 2. CHATBOT STATE & MULTI-TURN HISTORY
   // =========================================================================
 
   let chatOpen = false;
@@ -87,6 +111,9 @@
   let activeQuiz = null;
   let quizStep = 0;
   let quizScore = 0;
+
+  // Multi-turn conversation memory (last 8 turns)
+  const conversationHistory = [];
 
   // Local storage keys
   const STORAGE_KEY_API_KEY = "jm_cyberbot_gemini_key";
@@ -112,7 +139,167 @@
   }
 
   // =========================================================================
-  // 3. INTENT DETECTION & RESPONSE GENERATION
+  // 3. MARKDOWN TO CLEAN HTML CONVERTER
+  // =========================================================================
+
+  function renderMarkdown(md) {
+    if (!md) return '';
+
+    // First escape HTML to prevent raw script execution
+    let html = md
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    // Code blocks: ```code```
+    html = html.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, function (match, lang, code) {
+      return '<pre style="background:rgba(0,0,0,0.6);border:1px solid rgba(0,255,65,0.3);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0;font-size:0.82rem;color:#39ff14;"><code>' + code.trim() + '</code></pre>';
+    });
+
+    // Inline code: `code`
+    html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.45);border:1px solid rgba(0,255,65,0.25);padding:1px 5px;border-radius:3px;color:#39ff14;font-size:0.85em;">$1</code>');
+
+    // Bold: **text** or __text__
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--accent-green-bright, #39ff14);">$1</strong>');
+    html = html.replace(/__([^_]+)__/g, '<strong style="color:var(--accent-green-bright, #39ff14);">$1</strong>');
+
+    // Italic: *text* or _text_
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+    // Headers: ### Header
+    html = html.replace(/^### (.*$)/gim, '<h4 style="margin:6px 0;color:var(--accent-green-bright, #39ff14);font-size:0.92rem;">$1</h4>');
+    html = html.replace(/^## (.*$)/gim, '<h3 style="margin:8px 0;color:var(--accent-green-bright, #39ff14);font-size:0.98rem;">$1</h3>');
+    html = html.replace(/^# (.*$)/gim, '<h3 style="margin:8px 0;color:var(--accent-green-bright, #39ff14);font-size:1rem;">$1</h3>');
+
+    // Convert line breaks and lists
+    const lines = html.split('\n');
+    let inList = false;
+    let listType = '';
+    const output = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) {
+        if (inList) {
+          output.push(listType === 'ul' ? '</ul>' : '</ol>');
+          inList = false;
+        }
+        continue;
+      }
+
+      // Unordered list item
+      if (/^[*-]\s+(.*)$/.test(line)) {
+        if (!inList || listType !== 'ul') {
+          if (inList) output.push(listType === 'ul' ? '</ul>' : '</ol>');
+          output.push('<ul style="margin:4px 0 6px 18px;padding:0;">');
+          inList = true;
+          listType = 'ul';
+        }
+        output.push('<li style="margin-bottom:3px;">' + line.replace(/^[*-]\s+/, '') + '</li>');
+        continue;
+      }
+
+      // Ordered list item
+      if (/^\d+\.\s+(.*)$/.test(line)) {
+        if (!inList || listType !== 'ol') {
+          if (inList) output.push(listType === 'ul' ? '</ul>' : '</ol>');
+          output.push('<ol style="margin:4px 0 6px 18px;padding:0;">');
+          inList = true;
+          listType = 'ol';
+        }
+        output.push('<li style="margin-bottom:3px;">' + line.replace(/^\d+\.\s+/, '') + '</li>');
+        continue;
+      }
+
+      if (inList) {
+        output.push(listType === 'ul' ? '</ul>' : '</ol>');
+        inList = false;
+      }
+
+      if (line.startsWith('<pre') || line.startsWith('<h3') || line.startsWith('<h4')) {
+        output.push(line);
+      } else {
+        output.push('<p style="margin:0 0 6px 0;">' + line + '</p>');
+      }
+    }
+
+    if (inList) {
+      output.push(listType === 'ul' ? '</ul>' : '</ol>');
+    }
+
+    return output.join('');
+  }
+
+  // =========================================================================
+  // 4. LIVE AI API INTEGRATION (ANY QUESTION)
+  // =========================================================================
+
+  // Free high-speed AI inference (Pollinations) - No key required, CORS enabled
+  async function callFreeAI(prompt) {
+    const messages = [
+      { role: "system", content: SYSTEM_PROMPT },
+      ...conversationHistory.slice(-6),
+      { role: "user", content: prompt }
+    ];
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    const resp = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: messages,
+        model: 'openai'
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!resp.ok) {
+      throw new Error(`AI service responded with status: ${resp.status}`);
+    }
+
+    const text = await resp.text();
+    return text.trim();
+  }
+
+  // Optional custom Google Gemini API Key
+  async function callGeminiAPI(apiKey, prompt) {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const body = {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `${SYSTEM_PROMPT}\n\nUser Question: ${prompt}` }]
+        }
+      ],
+      generationConfig: {
+        maxOutputTokens: 650,
+        temperature: 0.7
+      }
+    };
+
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error (${resp.status})`);
+    }
+
+    const data = await resp.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  }
+
+  // =========================================================================
+  // 5. LOCAL HEURISTICS & INTENT FALLBACK ENGINE
   // =========================================================================
 
   function generateLocalResponse(rawQuery) {
@@ -210,8 +397,7 @@
         <li><strong>Target Audience:</strong> ${SITE_DATA.proposal.targetUsers}</li>
         <li><strong>Key Features:</strong> Interactive email sandbox, lookalike URL decoder, scenario quizzes, and MFA defense simulations.</li>
         <li><strong>Security Architecture:</strong> Zero credential storage, strict XSS sanitization, and TLS 1.3 client isolation.</li>
-      </ul>
-      You can ask me about specific deliverables (e.g., <em>"What is Deliverable 6?"</em> or <em>"What are the threats in Deliverable 5?"</em>)!`;
+      </ul>`;
     }
 
     // 11. Cybersecurity Concepts: CIA Triad
@@ -249,36 +435,12 @@
       return `This website and proposal were created for <strong>IT Computer Security</strong> taught by <strong>Prof. Xiwang Guo</strong>. The course explores core principles of cyber defense, vulnerability analysis, and network security.`;
     }
 
-    // 15. Help / Greeting
-    if (q.includes('hello') || q.includes('hi') || q.includes('hey') || q.includes('help') || q === 'start') {
-      return `Hello! I am <strong>CyberBot</strong>, John's cybersecurity and portfolio assistant.<br><br>Here are some things you can ask me:
-      <ul>
-        <li><em>"Tell me about John"</em></li>
-        <li><em>"What are John's technical skills?"</em></li>
-        <li><em>"What is PhishShield Academy?"</em></li>
-        <li><em>"Explain the CIA Triad"</em></li>
-        <li><em>"Why is personal data withheld?"</em></li>
-        <li>Type <code>/quiz</code> for an interactive phishing test</li>
-        <li>Paste a URL or type <code>/check &lt;url&gt;</code> to analyze it</li>
-      </ul>`;
-    }
-
-    // Fallback response with helpful guide
-    return `I am programmed to assist with John Manganelli's <strong>IT Computer Security portfolio</strong> and his <strong>PhishShield Academy</strong> proposal.<br><br>
-    Try asking:
-    <ul>
-      <li>🎓 <em>"Tell me about John's background and homelab"</em></li>
-      <li>💻 <em>"What tools and skills does John use?"</em></li>
-      <li>🛡️ <em>"What is PhishShield Academy?"</em></li>
-      <li>🔐 <em>"What is the CIA Triad?"</em></li>
-      <li>🎯 Type <code>/quiz</code> to play an interactive phishing simulation!</li>
-    </ul>
-    <em>Tip: You can also configure a live Google Gemini API key via the ⚙️ Settings button for open-ended queries!</em>`;
+    // 15. General Fallback
+    return `I am CyberBot! You can ask me <strong>ANY random question</strong> (science, jokes, coding, math, general questions) or ask about John Manganelli's cybersecurity portfolio and project proposal. Type <code>/quiz</code> to test your phishing skills!`;
   }
 
   // URL Phishing Analyzer
   function analyzeURL(rawText) {
-    // Extract URL pattern
     const urlMatch = rawText.match(/(https?:\/\/[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s]*)/i);
     const target = urlMatch ? urlMatch[0] : rawText.replace('/check', '').trim();
 
@@ -290,29 +452,29 @@
     const lower = target.toLowerCase();
 
     if (lower.startsWith('http://')) {
-      issues.push("⚠️ <strong>Unencrypted HTTP:</strong> Uses insecure HTTP instead of HTTPS.");
+      issues.push("⚠️ <strong>Unencrypted HTTP:</strong> Insecure protocol transmission.");
     }
     if (/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(lower)) {
-      issues.push("🚨 <strong>Raw IP Address:</strong> Legit institutions rarely direct users to raw numeric IP hosts.");
+      issues.push("🚨 <strong>Raw IP Address:</strong> Authentic organizations rarely direct users to numeric IP addresses.");
     }
     if (lower.includes('.xyz') || lower.includes('.top') || lower.includes('.work') || lower.includes('.cc') || lower.includes('.tk')) {
-      issues.push("⚠️ <strong>High-Risk TLD:</strong> Top-Level Domains like .xyz or .top are frequently used in disposable phishing campaigns.");
+      issues.push("⚠️ <strong>High-Risk TLD:</strong> TLD is frequently utilized in disposable credential-harvesting schemes.");
     }
     if (lower.includes('login') || lower.includes('verify') || lower.includes('account') || lower.includes('update') || lower.includes('secure')) {
       if (!lower.includes('.edu') && !lower.includes('.gov')) {
-        issues.push("🔍 <strong>Deceptive Keywords:</strong> Contains credential-harvesting triggers (login/verify/update).");
+        issues.push("🔍 <strong>Deceptive Keywords:</strong> Contains typical credential-harvesting triggers (login/verify/update).");
       }
     }
     if (lower.includes('@')) {
-      issues.push("🚨 <strong>Embedded Credential / Redirect:</strong> Contains '@' character used to obscure the true destination hostname.");
+      issues.push("🚨 <strong>Embedded Credential / Hostname Spoof:</strong> Contains '@' character used to obscure true destination.");
     }
     if (lower.split('.').length > 4) {
-      issues.push("⚠️ <strong>Excessive Subdomains:</strong> Phishers often stack subdomains (e.g., <code>paypal.com.verify.attacker.com</code>).");
+      issues.push("⚠️ <strong>Excessive Subdomains:</strong> Phishers often stack subdomains (e.g. <code>paypal.com.verify.attacker.com</code>).");
     }
 
     if (issues.length === 0) {
       return `<strong>URL Safety Inspection:</strong> <code>${escapeHtml(target)}</code><br><br>
-      ✅ <strong>No immediate obvious heuristics detected.</strong> However, always verify TLS certificates and confirm with trusted bookmarks before entering credentials!`;
+      ✅ <strong>No immediate obvious heuristics detected.</strong> Always confirm TLS certificates and rely on verified bookmarks before entering credentials!`;
     } else {
       return `<strong>Phishing Threat Analysis for:</strong> <code>${escapeHtml(target)}</code><br><br>
       Found <strong>${issues.length} Red Flag(s)</strong>:
@@ -322,7 +484,7 @@
   }
 
   // =========================================================================
-  // 4. INTERACTIVE QUIZ ENGINE
+  // 6. INTERACTIVE QUIZ ENGINE
   // =========================================================================
 
   function startQuiz() {
@@ -335,7 +497,6 @@
 
   function renderCurrentQuizStep() {
     if (!activeQuiz || quizStep >= activeQuiz.length) {
-      // Quiz Finished
       const finalMsg = `🏆 <strong>Quiz Complete!</strong><br>Your Detection Score: <strong>${quizScore} / ${activeQuiz.length}</strong> (${Math.round((quizScore / activeQuiz.length) * 100)}%).<br><br>` +
         (quizScore === activeQuiz.length
           ? "🌟 <em>Outstanding! You have sharp threat detection intuition!</em>"
@@ -358,7 +519,6 @@
 
     appendBotMessage(html);
 
-    // Bind option buttons in the latest message
     const msgList = document.getElementById('chat-messages');
     const lastMsg = msgList.lastElementChild;
     const buttons = lastMsg.querySelectorAll('.quiz-option-btn');
@@ -400,51 +560,7 @@
   }
 
   // =========================================================================
-  // 5. OPTIONAL GEMINI LIVE AI API INTEGRATION
-  // =========================================================================
-
-  async function callGeminiAPI(apiKey, prompt) {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    const systemInstruction = `You are CyberBot, an AI assistant for John Manganelli's IT Computer Security website.
-Key information:
-- John Manganelli is a Senior in Information Technology taking IT Computer Security with Prof. Xiwang Guo.
-- Core skills: Linux (Ubuntu/Kali), Wireshark, Nmap, Python defensive scripting, VirtualBox, Proxmox, homelab firewall testbed.
-- Hobbies: Guitar and fighting games. Career goal: SOC Analyst / Incident Response.
-- Website proposal: "PhishShield Academy", an interactive web sandbox for dissecting phishing emails & URLs to improve student detection rates.
-- Privacy: Sensitives like addresses, phone numbers, passwords, student ID, and SSN are intentionally withheld to prevent social engineering.
-Keep responses concise, informative, and formatted with clean HTML tags (<b>, <code>, <ul>, <li>). Maintain a professional cybersecurity tone.`;
-
-    const body = {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: `${systemInstruction}\n\nUser Question: ${prompt}` }]
-        }
-      ],
-      generationConfig: {
-        maxOutputTokens: 500,
-        temperature: 0.7
-      }
-    };
-
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error?.message || `API error (${resp.status})`);
-    }
-
-    const data = await resp.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-  }
-
-  // =========================================================================
-  // 6. DOM UI CREATION & EVENT LISTENERS
+  // 7. DOM UI CREATION & EVENT LISTENERS
   // =========================================================================
 
   function escapeHtml(str) {
@@ -520,30 +636,62 @@ Keep responses concise, informative, and formatted with clean HTML tags (<b>, <c
     appendUserMessage(text);
     showTyping(true);
 
-    const apiKey = localStorage.getItem(STORAGE_KEY_API_KEY) || sessionStorage.getItem(STORAGE_KEY_API_KEY);
+    const qLower = text.toLowerCase();
 
+    // Direct local command: Quiz
+    if (qLower === '/quiz' || qLower === 'quiz' || qLower === 'start quiz' || qLower === 'phishing quiz') {
+      showTyping(false);
+      startQuiz();
+      return;
+    }
+
+    // Direct local command: URL checker
+    if (text.startsWith('/check ') || (text.startsWith('http') && text.includes('://'))) {
+      showTyping(false);
+      const urlReport = analyzeURL(text);
+      appendBotMessage(urlReport);
+      return;
+    }
+
+    // Try Live Generative AI (Answers ANY random question!)
+    let aiResponse = null;
+
+    // Check if custom Gemini API Key exists
+    const apiKey = localStorage.getItem(STORAGE_KEY_API_KEY) || sessionStorage.getItem(STORAGE_KEY_API_KEY);
     if (apiKey) {
       try {
-        const liveResponse = await callGeminiAPI(apiKey, text);
-        showTyping(false);
-        if (liveResponse) {
-          appendBotMessage(liveResponse);
-          return;
-        }
+        aiResponse = await callGeminiAPI(apiKey, text);
       } catch (err) {
-        console.warn("Gemini API call failed, using local brain fallback:", err);
-        // Fall back seamlessly to local engine
+        console.warn("Custom Gemini API call failed, falling back to default AI engine:", err);
       }
     }
 
-    // Local heuristic engine
-    setTimeout(() => {
-      showTyping(false);
-      const reply = generateLocalResponse(text);
-      if (reply) {
-        appendBotMessage(reply);
+    // If no custom key or if it failed, use the universal free AI endpoint
+    if (!aiResponse) {
+      try {
+        aiResponse = await callFreeAI(text);
+      } catch (err) {
+        console.warn("Free AI endpoint call failed (offline or network error):", err);
       }
-    }, 450);
+    }
+
+    showTyping(false);
+
+    if (aiResponse) {
+      // Record conversation history
+      conversationHistory.push({ role: "user", content: text });
+      conversationHistory.push({ role: "assistant", content: aiResponse });
+      if (conversationHistory.length > 12) conversationHistory.splice(0, 2);
+
+      // Render markdown response
+      appendBotMessage(renderMarkdown(aiResponse));
+    } else {
+      // Offline fallback: Use local heuristics engine
+      const localReply = generateLocalResponse(text);
+      if (localReply) {
+        appendBotMessage(localReply);
+      }
+    }
   }
 
   function toggleChat(forceState) {
@@ -588,11 +736,12 @@ Keep responses concise, informative, and formatted with clean HTML tags (<b>, <c
     const list = document.getElementById('chat-messages');
     if (!list) return;
     list.innerHTML = '';
-    appendBotMessage(`Terminal cleared. Ready for your security or portfolio questions!<br><br>Tip: Type <code>/quiz</code> for an interactive challenge.`);
+    conversationHistory.length = 0;
+    appendBotMessage(`Terminal cleared. Ready for any question!<br><br>💡 <em>Ask me anything about cybersecurity, programming, general topics, or type <code>/quiz</code>!</em>`);
   }
 
   // =========================================================================
-  // 7. INITIALIZATION
+  // 8. INITIALIZATION
   // =========================================================================
 
   function initChatbot() {
@@ -676,11 +825,11 @@ Keep responses concise, informative, and formatted with clean HTML tags (<b>, <c
         const keyVal = apiKeyInput.value.trim();
         if (keyVal) {
           sessionStorage.setItem(STORAGE_KEY_API_KEY, keyVal);
-          appendBotMessage(`🔑 <strong>API Key Configured!</strong> CyberBot will now use live Gemini AI models when answering complex queries.`);
+          appendBotMessage(`🔑 <strong>Custom Gemini Key Configured!</strong> CyberBot is now using your custom Gemini API model.`);
         } else {
           sessionStorage.removeItem(STORAGE_KEY_API_KEY);
           localStorage.removeItem(STORAGE_KEY_API_KEY);
-          appendBotMessage(`ℹ️ Live API key removed. Reverted to built-in cybersecurity knowledge engine.`);
+          appendBotMessage(`ℹ️ Custom API key removed. Using default live AI engine.`);
         }
         toggleSettingsModal();
       });
@@ -691,7 +840,7 @@ Keep responses concise, informative, and formatted with clean HTML tags (<b>, <c
         apiKeyInput.value = '';
         sessionStorage.removeItem(STORAGE_KEY_API_KEY);
         localStorage.removeItem(STORAGE_KEY_API_KEY);
-        appendBotMessage(`ℹ️ API key cleared. Using built-in local knowledge engine.`);
+        appendBotMessage(`ℹ️ Custom API key cleared. Using default live AI engine.`);
         toggleSettingsModal();
       });
     }
@@ -709,9 +858,9 @@ Keep responses concise, informative, and formatted with clean HTML tags (<b>, <c
 
     // Initial greeting in message stream
     appendBotMessage(
-      `<strong>System Online.</strong> Welcome to John Manganelli's Cybersecurity Assistant!<br><br>` +
-      `Ask me anything about John's technical skills, homelab, privacy implementation, or the <strong>PhishShield Academy</strong> proposal.<br><br>` +
-      `💡 <em>Try clicking the prompt chips below or type <code>/quiz</code> to test your phishing detection skills!</em>`
+      `<strong>System Online.</strong> Welcome to CyberBot!<br><br>` +
+      `You can ask me <strong>ANY random question</strong>—from coding and cybersecurity to science, history, trivia, or jokes.<br><br>` +
+      `💡 <em>Try asking something random, or click any prompt chip below!</em>`
     );
   }
 

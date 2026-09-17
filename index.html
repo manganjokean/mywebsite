@@ -6,6 +6,7 @@
   <meta name="description" content="John Manganelli - Assignment 1: Cybersecurity Problem & Website Proposal. Complete 4-page submission and proposal deliverables for IT Computer Security.">
   <title>John Manganelli | Assignment 1 - Cybersecurity Problem & Website Proposal</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="chatbot.css">
 </head>
 <body>
   <!-- Background Matrix Digital Rain Canvas -->
@@ -27,6 +28,7 @@
           <li><a href="#tech-interests"><span class="nav-idx">03.</span> Tech Interests</a></li>
           <li><a href="#cyber-awareness"><span class="nav-idx">04.</span> Cyber Awareness</a></li>
           <li><a href="#proposal" class="nav-highlight">Project Proposal &#x2192;</a></li>
+          <li><button type="button" class="nav-chat-btn nav-chat-trigger" aria-label="Open AI Cybersecurity Chatbot">&#x1F916; AI Assistant</button></li>
         </ul>
       </nav>
     </div>
@@ -526,12 +528,104 @@
     </div>
   </footer>
 
+  <!-- ======================================================== -->
+  <!-- AI CHATBOT WIDGET: CYBERBOT // SENTINEL-AI               -->
+  <!-- ======================================================== -->
+  <aside id="chatbot-container" class="chatbot-container" aria-label="AI Cybersecurity Assistant">
+    <!-- Floating Launcher Button -->
+    <button id="chatbot-launcher" class="chatbot-launcher" aria-expanded="false" aria-controls="chatbot-dialog" aria-label="Open AI Cybersecurity Assistant">
+      <span class="launcher-icon" aria-hidden="true">&#x1F916;</span>
+      <span class="launcher-label">
+        <span class="launcher-title">CyberBot AI</span>
+        <span class="launcher-status"><span class="status-dot"></span> ONLINE</span>
+      </span>
+    </button>
+
+    <!-- Chatbot Window Dialog -->
+    <section id="chatbot-dialog" class="chatbot-dialog" role="dialog" aria-label="CyberBot Security Assistant" aria-hidden="true">
+      <!-- Chat Header -->
+      <header class="chat-header">
+        <div class="chat-header-info">
+          <div class="chat-avatar" aria-hidden="true">&#x1F6E1;&#xFE0F;</div>
+          <div class="chat-title-wrap">
+            <span class="chat-bot-name">CyberBot // Sentinel-AI</span>
+            <span class="chat-bot-role">Security &amp; Portfolio Assistant</span>
+          </div>
+        </div>
+        <div class="chat-header-actions">
+          <button type="button" id="chat-audio-btn" class="chat-btn-icon" title="Toggle audio sound effects" aria-label="Toggle audio effects">&#x1F507;</button>
+          <button type="button" id="chat-settings-btn" class="chat-btn-icon" title="AI Settings &amp; API Key" aria-label="AI Settings">&#x2699;&#xFE0F;</button>
+          <button type="button" id="chat-clear-btn" class="chat-btn-icon" title="Clear conversation history" aria-label="Clear chat">&#x1F5D1;&#xFE0F;</button>
+          <button type="button" id="chat-expand-btn" class="chat-btn-icon" title="Expand window size" aria-label="Expand chat">&#x26F6;</button>
+          <button type="button" id="chat-close-btn" class="chat-btn-icon" title="Close chat window (Esc)" aria-label="Close chat">&#x2715;</button>
+        </div>
+      </header>
+
+      <!-- Chat Body -->
+      <div class="chat-body-wrapper">
+        <!-- Message Stream -->
+        <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
+
+        <!-- Typing Indicator -->
+        <div id="chat-typing" class="chat-typing-indicator" aria-label="CyberBot is typing">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </div>
+
+        <!-- Suggestion Chips -->
+        <div id="chat-suggestions" class="chat-suggestions" aria-label="Suggested questions">
+          <button type="button" class="suggestion-chip" data-query="Tell me about John">🎓 About John</button>
+          <button type="button" class="suggestion-chip" data-query="What is PhishShield Academy?">🛡️ PhishShield</button>
+          <button type="button" class="suggestion-chip" data-query="What technical skills does John have?">💻 Tech Skills</button>
+          <button type="button" class="suggestion-chip" data-query="Explain the CIA Triad">🔐 CIA Triad</button>
+          <button type="button" class="suggestion-chip" data-query="/quiz">🎯 Phishing Quiz</button>
+          <button type="button" class="suggestion-chip" data-query="Why is personal data withheld?">🚫 Privacy Policy</button>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="chat-input-bar">
+          <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question or type /quiz..." aria-label="Message CyberBot">
+          <button type="button" id="chat-send-btn" class="chat-send-btn" aria-label="Send message">&#x27A4;</button>
+        </div>
+      </div>
+
+      <!-- Settings Modal Panel (Optional Gemini API key) -->
+      <div id="chat-settings-modal" class="chat-settings-modal is-hidden" aria-label="AI Configuration Panel">
+        <h4 class="settings-heading">&#x2699;&#xFE0F; AI Engine Settings</h4>
+        <p class="settings-description">
+          By default, CyberBot uses a local offline cybersecurity knowledge base and quiz engine.
+          Optionally provide a <strong>Google Gemini API Key</strong> to enable live generative AI responses.
+        </p>
+        <div>
+          <label for="chat-api-key-input" class="settings-label">Gemini API Key (Optional):</label>
+          <input type="password" id="chat-api-key-input" class="settings-input" placeholder="AIzaSy...">
+        </div>
+        <p class="settings-description" style="font-size:0.75rem;opacity:0.8;">
+          🔒 <em>Zero Data Retention: Your key is stored solely in local browser memory and never transmitted to any third-party server.</em>
+        </p>
+        <div class="settings-actions">
+          <button type="button" id="chat-save-key-btn" class="btn btn-primary" style="padding:6px 12px;font-size:0.8rem;">Save Key</button>
+          <button type="button" id="chat-clear-key-btn" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;">Remove</button>
+          <button type="button" id="chat-close-settings-btn" class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;margin-left:auto;">Cancel</button>
+        </div>
+      </div>
+    </section>
+  </aside>
+
   <!-- Matrix Digital Rain Animation Script -->
-<script src="matrix.js"></script>
-<div class="download-all" style="text-align:center;padding:1rem;">
-  <a href="index.html" download class="btn btn-primary" style="margin:0.3rem;">Download HTML</a>
-  <a href="style.css" download class="btn btn-primary" style="margin:0.3rem;">Download CSS</a>
-  <a href="matrix.js" download class="btn btn-primary" style="margin:0.3rem;">Download JS</a>
-<a href="site.zip" download class="btn btn-primary" style="margin:0.3rem;">Download All (ZIP)</a>
+  <script src="matrix.js"></script>
+  <!-- CyberBot AI Chatbot Script -->
+  <script src="chatbot.js"></script>
+
+  <!-- Project Download Bar -->
+  <div class="download-all" style="text-align:center;padding:1.5rem;">
+    <a href="index.html" download class="btn btn-primary" style="margin:0.3rem;">Download HTML</a>
+    <a href="style.css" download class="btn btn-primary" style="margin:0.3rem;">Download CSS</a>
+    <a href="matrix.js" download class="btn btn-primary" style="margin:0.3rem;">Download Matrix JS</a>
+    <a href="chatbot.js" download class="btn btn-primary" style="margin:0.3rem;">Download Chatbot JS</a>
+    <a href="chatbot.css" download class="btn btn-primary" style="margin:0.3rem;">Download Chatbot CSS</a>
+    <a href="site.zip" download class="btn btn-primary" style="margin:0.3rem;">Download All (ZIP)</a>
+  </div>
 </body>
 </html>

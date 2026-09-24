@@ -204,6 +204,13 @@
   color: #ffffff;
 }
 
+/* Mic listening visual feedback */
+.chat-btn-icon.listening {
+  background: rgba(0, 255, 65, 0.15);
+  border-color: var(--accent-green-bright, #39ff14);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+}
+
 /* Scanline Overlay (Retro Matrix Feel) */
 .chat-body-wrapper {
   position: relative;

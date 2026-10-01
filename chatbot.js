@@ -70,10 +70,12 @@ FORMATTING:
   let chatOpen = false;
   let isExpanded = false;
   let isAudioMuted = true;
-  // Voice chat state
+  // Voice chat & Jarvis state
   let isVoiceOutputEnabled = false;
-  let isRecognitionActive = false;
+  let jarvisActive = false;
+  let isJarvisAwake = false;
   let recognition = null;
+  let sleepTimer = null;
 
   // Multi-turn conversation memory
   const conversationHistory = [];
@@ -81,7 +83,7 @@ FORMATTING:
   // Local storage keys
   const STORAGE_KEY_API_KEY = "jm_cyberbot_gemini_key";
 
-  // Initialize Speech Recognition if supported
+  // Initialize Continuous Speech Recognition for "Hey Jarvis"
   function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -90,60 +92,106 @@ FORMATTING:
     }
     recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.trim();
-      console.log('Voice input:', transcript);
-      // Populate input and trigger send
-      const input = document.getElementById('chat-input');
-      if (input) {
-        input.value = transcript;
-        // Directly call handleSend (will respect throttling)
-        handleSend();
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+        else interimTranscript += event.results[i][0].transcript;
+      }
+
+      const currentText = (finalTranscript || interimTranscript).toLowerCase();
+
+      // 1. Wake word detection
+      if (!isJarvisAwake && currentText.includes("hey jarvis")) {
+        isJarvisAwake = true;
+        updateMicButton(true);
+        playCyberBeep(1000, 'sine', 0.1);
+        const input = document.getElementById('chat-input');
+        if (input) input.value = "Jarvis is listening...";
+        if (!chatOpen) toggleChat(true); // Open the chat window if it's closed
+      }
+
+      // 2. Capture actual command after waking up
+      if (isJarvisAwake && finalTranscript) {
+        let command = finalTranscript.toLowerCase();
+        
+        // Remove the wake word from the final prompt if they said it in the same breath
+        if (command.includes("hey jarvis")) {
+          command = command.split("hey jarvis").pop().trim();
+        }
+
+        // Only send if there's actually a command (not just silence)
+        if (command.length > 2 && command !== "jarvis is listening...") {
+          const input = document.getElementById('chat-input');
+          if (input) input.value = command;
+          handleSend();
+          
+          isJarvisAwake = false;
+          updateMicButton(false);
+        }
+      }
+
+      // 3. Auto-sleep if no command given
+      if (isJarvisAwake) {
+        clearTimeout(sleepTimer);
+        sleepTimer = setTimeout(() => {
+          isJarvisAwake = false;
+          updateMicButton(false);
+          const input = document.getElementById('chat-input');
+          if (input && input.value === "Jarvis is listening...") input.value = "";
+        }, 6000); // 6 seconds of silence = go back to sleep
       }
     };
+
     recognition.onerror = (event) => {
-      console.warn('Speech recognition error:', event.error);
-      alert('Voice input error: ' + event.error);
+      if (event.error !== 'no-speech') console.warn('Speech recognition error:', event.error);
     };
+
     recognition.onend = () => {
-      isRecognitionActive = false;
-      updateMicButton(false);
+      // Auto-restart if Jarvis Mode is active
+      if (jarvisActive) {
+        try { recognition.start(); } catch(e) {}
+      }
     };
-  }
-
-  function startVoiceRecognition() {
-    if (!recognition) initSpeechRecognition();
-    if (recognition && !isRecognitionActive) {
-      isRecognitionActive = true;
-      updateMicButton(true);
-      recognition.start();
-    }
-  }
-
-  function stopVoiceRecognition() {
-    if (recognition && isRecognitionActive) {
-      recognition.stop();
-    }
   }
 
   function toggleVoiceRecognition() {
-    if (isRecognitionActive) {
-      stopVoiceRecognition();
+    if (!recognition) initSpeechRecognition();
+    if (!recognition) return;
+
+    jarvisActive = !jarvisActive;
+    const micBtn = document.getElementById('chat-mic-btn');
+
+    if (jarvisActive) {
+      try { recognition.start(); } catch(e) {}
+      if (micBtn) {
+        micBtn.title = "Jarvis Mode ON (Listening for 'Hey Jarvis')";
+        micBtn.style.color = "#39ff14"; // Turn icon green permanently
+      }
+      playCyberBeep(800, 'triangle', 0.1);
     } else {
-      startVoiceRecognition();
+      jarvisActive = false;
+      isJarvisAwake = false;
+      recognition.stop();
+      updateMicButton(false);
+      if (micBtn) {
+        micBtn.title = "Voice Input (Microphone)";
+        micBtn.style.color = ""; 
+      }
+      playCyberBeep(400, 'triangle', 0.1);
     }
   }
 
   function updateMicButton(active) {
     const micBtn = document.getElementById('chat-mic-btn');
     if (micBtn) {
-      if (active) {
-        micBtn.classList.add('listening');
-      } else {
-        micBtn.classList.remove('listening');
-      }
+      if (active) micBtn.classList.add('listening');
+      else micBtn.classList.remove('listening');
     }
   }
 

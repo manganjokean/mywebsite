@@ -104,47 +104,58 @@ FORMATTING:
         else interimTranscript += event.results[i][0].transcript;
       }
 
-      const currentText = (finalTranscript || interimTranscript).toLowerCase();
+      let currentText = (finalTranscript || interimTranscript).toLowerCase();
+      // Remove punctuation that might mess up the string match
+      let cleanText = currentText.replace(/[.,!?]/g, '');
+      const input = document.getElementById('chat-input');
 
-      // 1. Wake word detection
-      if (!isJarvisAwake && currentText.includes("hey jarvis")) {
+      // 1. Wake word detection (accepts "hey jarvis", "ok jarvis", or just "jarvis")
+      if (!isJarvisAwake && (cleanText.includes("jarvis"))) {
         isJarvisAwake = true;
         updateMicButton(true);
         playCyberBeep(1000, 'sine', 0.1);
-        const input = document.getElementById('chat-input');
-        if (input) input.value = "Jarvis is listening...";
-        if (!chatOpen) toggleChat(true); // Open the chat window if it's closed
+        if (!chatOpen) toggleChat(true);
+
+        // Check if they said a command immediately after the wake word
+        let command = cleanText.split("jarvis").pop().trim();
+        
+        if (command.length > 2) {
+          if (input) input.value = command;
+          handleSend();
+          isJarvisAwake = false;
+          updateMicButton(false);
+          return;
+        } else {
+          if (input) input.value = "Jarvis listening...";
+        }
       }
 
       // 2. Capture actual command after waking up
-      if (isJarvisAwake && finalTranscript) {
-        let command = finalTranscript.toLowerCase();
-        
-        // Remove the wake word from the final prompt if they said it in the same breath
-        if (command.includes("hey jarvis")) {
-          command = command.split("hey jarvis").pop().trim();
+      else if (isJarvisAwake) {
+        // Show live transcript feedback so the user knows the mic is working
+        if (input && currentText && !currentText.includes("jarvis")) {
+          input.value = currentText;
         }
 
-        // Only send if there's actually a command (not just silence)
-        if (command.length > 2 && command !== "jarvis is listening...") {
-          const input = document.getElementById('chat-input');
-          if (input) input.value = command;
-          handleSend();
-          
-          isJarvisAwake = false;
-          updateMicButton(false);
+        if (finalTranscript) {
+          let command = cleanText.replace(/jarvis/g, '').trim();
+          if (command.length > 2) {
+            if (input) input.value = command; // Ensure final text is set
+            handleSend();
+            isJarvisAwake = false;
+            updateMicButton(false);
+          }
         }
-      }
 
-      // 3. Auto-sleep if no command given
-      if (isJarvisAwake) {
+        // 3. Auto-sleep if no command given
         clearTimeout(sleepTimer);
         sleepTimer = setTimeout(() => {
           isJarvisAwake = false;
           updateMicButton(false);
-          const input = document.getElementById('chat-input');
-          if (input && input.value === "Jarvis is listening...") input.value = "";
-        }, 6000); // 6 seconds of silence = go back to sleep
+          if (input && (input.value === "Jarvis listening..." || input.value === currentText)) {
+            input.value = "";
+          }
+        }, 5000); // 5 seconds of silence = go back to sleep
       }
     };
 
@@ -153,9 +164,11 @@ FORMATTING:
     };
 
     recognition.onend = () => {
-      // Auto-restart if Jarvis Mode is active
+      // Auto-restart if Jarvis Mode is active (with a slight delay to prevent browser crash loops)
       if (jarvisActive) {
-        try { recognition.start(); } catch(e) {}
+        setTimeout(() => {
+          try { recognition.start(); } catch(e) {}
+        }, 250);
       }
     };
   }

@@ -369,7 +369,7 @@ FORMATTING:
   // =========================================================================
 
   // Free high-speed AI inference (Pollinations) - No key required, CORS enabled
-  // Enhanced error handling and rate‑limit management
+  // Enhanced error handling and fallback support
   async function callFreeAI(prompt) {
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
@@ -377,49 +377,43 @@ FORMATTING:
       { role: "user", content: prompt }
     ];
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    // Try Pollinations API
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    const resp = await fetch('https://text.pollinations.ai/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: messages,
-        model: 'openai'
-      }),
-      signal: controller.signal
-    });
+      const resp = await fetch('https://text.pollinations.ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, model: 'openai' }),
+        signal: controller.signal
+      });
 
-    clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-    // Check for HTTP errors (e.g., 429 Too Many Requests)
-    if (!resp.ok) {
-      // Attempt to read JSON error payload if available
-      let errorInfo = null;
-      try {
-        const json = await resp.json();
-        errorInfo = json.error?.message || json.message || JSON.stringify(json);
-      } catch (_) {
-        // Not JSON – fall back to raw text
-        errorInfo = await resp.text();
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text && text.length > 0) return text.trim();
       }
-      throw new Error(`AI service error (${resp.status}): ${errorInfo}`);
+    } catch (e) {
+      console.warn('Pollinations AI failed:', e.message);
     }
 
-    // Some 200 responses may still contain a JSON error object (certain rate‑limit implementations)
-    const contentType = resp.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const json = await resp.json();
-      if (json.error || json.message) {
-        const msg = json.error?.message || json.message;
-        throw new Error(`AI service returned error payload: ${msg}`);
+    // Fallback: Try Pollinations GET endpoint
+    try {
+      const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+      const encoded = encodeURIComponent(fullPrompt);
+      const resp = await fetch(`https://text.pollinations.ai/${encoded}?model=openai`);
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text && text.length > 0) return text.trim();
       }
-      // If JSON looks like a proper answer (unlikely), fall back to string conversion
-      return JSON.stringify(json).trim();
+    } catch (e) {
+      console.warn('Pollinations GET fallback failed:', e.message);
     }
 
-    const text = await resp.text();
-    return text.trim();
+    // All AI services failed
+    throw new Error('All AI services unavailable');
   }
 
   // Optional custom Google Gemini API Key
@@ -504,7 +498,7 @@ FORMATTING:
       return `Why do security engineers love coffee?<br><em>Because it prevents buffer underflows!</em> ☕`;
     }
 
-    return `I am CyberBot! You can ask me any question about cybersecurity, coding, general topics, or John's portfolio.`;
+    return `<strong>AI Service Notice:</strong> The live AI service is temporarily unreachable from your browser. This may be due to network connectivity or API rate limiting. Please try again in a few moments. You can also configure a Gemini API key in the Settings panel for a more reliable experience.`;
   }
 
   // =========================================================================

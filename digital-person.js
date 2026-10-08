@@ -478,10 +478,11 @@ FORMATTING:
       { role: 'user', content: prompt }
     ];
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
+    // Try Pollinations POST endpoint
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const resp = await fetch('https://text.pollinations.ai/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -491,23 +492,28 @@ FORMATTING:
 
       clearTimeout(timeoutId);
 
-      if (!resp.ok) throw new Error('AI service error: ' + resp.status);
-
-      const contentType = resp.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const json = await resp.json();
-        if (json.error || json.message) {
-          throw new Error(json.error?.message || json.message);
-        }
-        return JSON.stringify(json).trim();
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text && text.length > 0) return text.trim();
       }
-
-      const text = await resp.text();
-      return text.trim();
-    } catch (err) {
-      console.warn('AI call failed:', err);
-      return null;
+    } catch (e) {
+      console.warn('Pollinations POST failed:', e.message);
     }
+
+    // Fallback: Try Pollinations GET endpoint
+    try {
+      const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+      const encoded = encodeURIComponent(fullPrompt);
+      const resp = await fetch(`https://text.pollinations.ai/${encoded}?model=openai`);
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text && text.length > 0) return text.trim();
+      }
+    } catch (e) {
+      console.warn('Pollinations GET fallback failed:', e.message);
+    }
+
+    return null;
   }
 
   // =========================================================================

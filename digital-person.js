@@ -478,39 +478,46 @@ FORMATTING:
       { role: 'user', content: prompt }
     ];
 
-    // Try Pollinations POST endpoint
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      const resp = await fetch('https://text.pollinations.ai/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, model: 'openai' }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (resp.ok) {
-        const text = await resp.text();
-        if (text && text.length > 0) return text.trim();
-      }
-    } catch (e) {
-      console.warn('Pollinations POST failed:', e.message);
-    }
-
-    // Fallback: Try Pollinations GET endpoint
+    // Method 1: Pollinations GET (most CORS-friendly)
     try {
       const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
       const encoded = encodeURIComponent(fullPrompt);
       const resp = await fetch(`https://text.pollinations.ai/${encoded}?model=openai`);
       if (resp.ok) {
         const text = await resp.text();
-        if (text && text.length > 0) return text.trim();
+        if (text && text.length > 2) return text.trim();
       }
     } catch (e) {
-      console.warn('Pollinations GET fallback failed:', e.message);
+      console.warn('Pollinations GET failed:', e.message);
+    }
+
+    // Method 2: Pollinations POST
+    try {
+      const resp = await fetch('https://text.pollinations.ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, model: 'openai' })
+      });
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text && text.length > 2) return text.trim();
+      }
+    } catch (e) {
+      console.warn('Pollinations POST failed:', e.message);
+    }
+
+    // Method 3: CORS Proxy
+    try {
+      const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+      const encoded = encodeURIComponent(fullPrompt);
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://text.pollinations.ai/${encoded}?model=openai`)}`;
+      const resp = await fetch(proxyUrl);
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text && text.length > 2 && !text.includes('error')) return text.trim();
+      }
+    } catch (e) {
+      console.warn('CORS proxy failed:', e.message);
     }
 
     return null;

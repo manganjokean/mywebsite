@@ -471,15 +471,80 @@ FORMATTING:
     }
   }
 
-  async function callAI(prompt) {
-    const messages = [
-      { role: 'system', content: DIGITAL_PERSON_PROMPT },
-      ...conversationHistory.slice(-6),
-      { role: 'user', content: prompt }
-    ];
+  // =========================================================================
+  // 7B. LOCAL AI RESPONSE ENGINE (Works 100% of the time)
+  // =========================================================================
 
-    // Method 1: Pollinations GET (most CORS-friendly)
+  const DP_KNOWLEDGE_BASE = {
+    cybersecurity: [
+      { keywords: ['phishing', 'phish', 'scam'], response: `<strong>Phishing</strong> is a social engineering attack where criminals impersonate legitimate organizations to steal credentials or personal information. Always verify sender addresses, hover over links before clicking, and never share passwords via email.` },
+      { keywords: ['password', 'credential'], response: `<strong>Password Security:</strong> Use unique passwords for every account, minimum 16 characters, enable MFA everywhere, use a password manager, and avoid SMS-based MFA to prevent SIM-swapping attacks.` },
+      { keywords: ['vpn'], response: `<strong>VPN</strong> encrypts your internet traffic and routes it through a remote server, protecting your data on public Wi-Fi and masking your IP address.` },
+      { keywords: ['firewall'], response: `<strong>Firewalls</strong> monitor and control network traffic based on security rules. Types include network-based (hardware), host-based (software), and next-gen (deep packet inspection).` },
+      { keywords: ['malware', 'virus', 'ransomware'], response: `<strong>Malware</strong> includes viruses (attach to programs), trojans (disguised as legit software), ransomware (encrypts files for payment), spyware (monitors activity), and worms (self-replicating).` },
+      { keywords: ['encryption', 'encrypt', 'aes', 'rsa'], response: `<strong>Encryption</strong> converts readable data into unreadable code. AES-256 is the standard for symmetric encryption, RSA for asymmetric, and TLS 1.3 for data in transit.` },
+      { keywords: ['ddos', 'denial'], response: `<strong>DDoS</strong> attacks overwhelm targets with traffic from many sources. Mitigation includes rate limiting, CDN filtering, and anycast networks.` },
+      { keywords: ['zero trust'], response: `<strong>Zero Trust</strong> means "never trust, always verify." Every access request is verified regardless of origin, with least privilege and micro-segmentation.` },
+      { keywords: ['mfa', '2fa', 'two-factor', 'multi-factor'], response: `<strong>MFA</strong> requires 2+ verification methods: something you know (password), something you have (phone), or something you are (biometric). Use authenticator apps over SMS.` },
+      { keywords: ['vulnerability', 'cve', 'exploit'], response: `<strong>Vulnerabilities</strong> are weaknesses in systems. CVEs are standardized IDs, CVSS rates severity 0-10, and exploits are code that takes advantage of them.` },
+      { keywords: ['network', 'subnet', 'tcp', 'dns'], response: `<strong>Networking:</strong> TCP/IP is the core protocol suite. Subnets divide networks logically, DNS translates hostnames to IPs, and NAT maps private to public IPs.` }
+    ],
+    john: [
+      { keywords: ['john', 'manganelli', 'who are you', 'about'], response: `I am the <strong>AI Digital Person</strong> of <strong>John Manganelli</strong>, a Senior majoring in Information Technology, enrolled in IT Computer Security under Prof. Xiwang Guo. I can answer questions about cybersecurity, John's skills, or general topics!` },
+      { keywords: ['skill', 'skills', 'tools'], response: `<strong>John's Skills:</strong> Linux (Ubuntu, Kali), Wireshark, Nmap, Python defensive scripting, Bash, VirtualBox, Proxmox, and subnet configuration.` },
+      { keywords: ['career', 'job', 'goal'], response: `<strong>Career Goals:</strong> John aims to become a SOC Analyst or Incident Response Specialist, defending organizations from cyberattacks.` },
+      { keywords: ['hobb', 'guitar', 'game'], response: `John enjoys playing <strong>guitar</strong> and competitive <strong>fighting games</strong>!` },
+      { keywords: ['homelab', 'lab', 'server'], response: `<strong>Homelab:</strong> John built a multi-node physical home lab server for testing isolated subnets, custom firewalls, and defensive security environments.` },
+      { keywords: ['privacy', 'pii'], response: `<strong>Privacy:</strong> This site intentionally withholds PII (address, phone, SSN, passwords) to demonstrate good security hygiene.` }
+    ],
+    general: [
+      { keywords: ['hello', 'hi', 'hey'], response: `Hello! I'm John's AI Digital Person. You can ask me about cybersecurity, John's portfolio, or general topics. What would you like to know?` },
+      { keywords: ['help', 'what can'], response: `I can help with: cybersecurity concepts (phishing, malware, encryption, firewalls), John's background and skills, this website's features, and learning resources. Just ask!` },
+      { keywords: ['thank', 'thanks'], response: `You're welcome! Feel free to ask me anything else.` },
+      { keywords: ['bye', 'goodbye'], response: `Goodbye! Stay safe online!` },
+      { keywords: ['joke', 'funny'], response: `Why did the security engineer get kicked out of the restaurant? They kept trying to authenticate the waiter! (╯°□°)╯︵ ┻━┻` },
+      { keywords: ['what is cybersecurity', 'define'], response: `<strong>Cybersecurity</strong> protects systems, networks, and data from unauthorized access. The CIA Triad: Confidentiality, Integrity, Availability.` },
+      { keywords: ['cia triad', 'confidentiality', 'integrity', 'availability'], response: `<strong>CIA Triad:</strong> Confidentiality (prevent unauthorized access), Integrity (ensure data accuracy), Availability (ensure access when needed).` },
+      { keywords: ['how to learn', 'study', 'certification'], response: `<strong>Learning Cybersecurity:</strong> Get CompTIA Security+, practice on TryHackMe/Hack The Box, build a home lab, and follow Krebs on Security.` },
+      { keywords: ['kaggle', 'dataset', 'machine learning'], response: `<strong>Cybersecurity Datasets on Kaggle:</strong> NSL-KDD (intrusion detection), Microsoft Malware Classification, Phishing Websites Dataset, LANL logs.` }
+    ]
+  };
+
+  function getLocalAIResponse(query) {
+    const q = query.toLowerCase().trim();
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const category of Object.values(DP_KNOWLEDGE_BASE)) {
+      for (const entry of category) {
+        let score = 0;
+        for (const keyword of entry.keywords) {
+          if (q.includes(keyword)) {
+            score += keyword.length;
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = entry;
+        }
+      }
+    }
+
+    if (bestMatch && bestScore > 0) {
+      return bestMatch.response;
+    }
+
+    return `<strong>Interesting question!</strong> I can help with cybersecurity topics, John's background, or website features. Try asking about phishing, encryption, firewalls, or John's skills!`;
+  }
+
+  async function callAI(prompt) {
+    // Try external API first
     try {
+      const messages = [
+        { role: 'system', content: DIGITAL_PERSON_PROMPT },
+        ...conversationHistory.slice(-6),
+        { role: 'user', content: prompt }
+      ];
       const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
       const encoded = encodeURIComponent(fullPrompt);
       const resp = await fetch(`https://text.pollinations.ai/${encoded}?model=openai`);
@@ -488,39 +553,11 @@ FORMATTING:
         if (text && text.length > 2) return text.trim();
       }
     } catch (e) {
-      console.warn('Pollinations GET failed:', e.message);
+      console.warn('External AI failed, using local engine:', e.message);
     }
 
-    // Method 2: Pollinations POST
-    try {
-      const resp = await fetch('https://text.pollinations.ai/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, model: 'openai' })
-      });
-      if (resp.ok) {
-        const text = await resp.text();
-        if (text && text.length > 2) return text.trim();
-      }
-    } catch (e) {
-      console.warn('Pollinations POST failed:', e.message);
-    }
-
-    // Method 3: CORS Proxy
-    try {
-      const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
-      const encoded = encodeURIComponent(fullPrompt);
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://text.pollinations.ai/${encoded}?model=openai`)}`;
-      const resp = await fetch(proxyUrl);
-      if (resp.ok) {
-        const text = await resp.text();
-        if (text && text.length > 2 && !text.includes('error')) return text.trim();
-      }
-    } catch (e) {
-      console.warn('CORS proxy failed:', e.message);
-    }
-
-    return null;
+    // Fall back to local AI engine (always works)
+    return getLocalAIResponse(prompt);
   }
 
   // =========================================================================

@@ -368,16 +368,89 @@ FORMATTING:
   // 4. LIVE GENERATIVE AI (ANSWERS ANY RANDOM QUESTION)
   // =========================================================================
 
-  // Free AI inference with multiple fallbacks for CORS reliability
-  async function callFreeAI(prompt) {
-    const messages = [
-      { role: "system", content: SYSTEM_PROMPT },
-      ...conversationHistory.slice(-8),
-      { role: "user", content: prompt }
-    ];
+  // =========================================================================
+  // 4. AI RESPONSE ENGINE (Local Knowledge Base + External API Fallback)
+  // =========================================================================
 
+  const KNOWLEDGE_BASE = {
+    cybersecurity: [
+      { keywords: ['phishing', 'phish', 'email scam', 'fake email'], response: `<strong>Phishing</strong> is a social engineering attack where criminals impersonate legitimate organizations to steal credentials, financial data, or personal information.<br><br><strong>Red flags to watch for:</strong><ul><li>Urgent or threatening language ("Act now!")</li><li>Suspicious sender addresses (e.g., <code>support@arnazon.com</code>)</li><li>Mismatched URLs — hover before clicking</li><li>Requests for passwords or financial info</li><li>Poor grammar and spelling</li></ul><em>Always verify through official channels before taking action.</em>` },
+      { keywords: ['password', 'passwords', 'credential'], response: `<strong>Password Security Best Practices:</strong><ul><li>Use <strong>unique passwords</strong> for every account</li><li>Minimum <strong>16 characters</strong> — use passphrases</li><li>Enable <strong>Multi-Factor Authentication (MFA)</strong> everywhere</li><li>Use a <strong>password manager</strong> (Bitwarden, KeePass)</li><li>Never reuse passwords across services</li><li>Avoid SMS-based MFA — use authenticator apps</li></ul>` },
+      { keywords: ['vpn', 'virtual private network'], response: `<strong>VPN (Virtual Private Network):</strong> A VPN encrypts your internet traffic and routes it through a remote server, protecting your data on public Wi-Fi and masking your IP address.<br><br><strong>When to use:</strong><ul><li>Public Wi-Fi networks (cafes, airports)</li><li>Bypassing geographic restrictions</li><li>Privacy from ISP tracking</li></ul><em>Recommended: ProtonVPN, Mullvad, WireGuard protocol</em>` },
+      { keywords: ['firewall', 'firewalls'], response: `<strong>Firewall:</strong> A network security system that monitors and controls incoming/outgoing traffic based on predetermined security rules.<br><br><strong>Types:</strong><ul><li><strong>Network-based:</strong> Hardware firewalls (routers, dedicated appliances)</li><li><strong>Host-based:</strong> Software firewalls (Windows Defender, iptables)</li><li><strong>Next-Gen (NGFW):</strong> Deep packet inspection, application awareness</li><li><strong>WAF:</strong> Web application firewalls for HTTP/HTTPS protection</li></ul>` },
+      { keywords: ['malware', 'virus', 'trojan', 'ransomware'], response: `<strong>Malware Types:</strong><ul><li><strong>Virus:</strong> Attaches to legitimate programs, requires user action to spread</li><li><strong>Trojan:</strong> Disguises as legitimate software, creates backdoors</li><li><strong>Ransomware:</strong> Encrypts files, demands payment (e.g., WannaCry, NotPetya)</li><li><strong>Spyware:</strong> Secretly monitors user activity</li><li><strong>Adware:</strong> Unwanted advertising, often bundled with free software</li><li><strong>Worm:</strong> Self-replicating, spreads without user action</li></ul><strong>Protection:</strong> Keep systems updated, use antivirus, practice least privilege.` },
+      { keywords: ['encryption', 'encrypt', 'aes', 'rsa', 'tls', 'ssl'], response: `<strong>Encryption</strong> converts readable data (plaintext) into unreadable code (ciphertext) using mathematical algorithms.<br><br><strong>Key types:</strong><ul><li><strong>AES-256:</strong> Symmetric encryption, industry standard for data at rest</li><li><strong>RSA:</strong> Asymmetric encryption, used for key exchange and digital signatures</li><li><strong>TLS 1.3:</strong> Encrypts data in transit (HTTPS)</li><li><strong>SHA-256:</strong> Cryptographic hash function for integrity verification</li></ul><em>"Encryption is the last line of defense."</em>` },
+      { keywords: ['ddos', 'denial of service'], response: `<strong>DDoS (Distributed Denial of Service):</strong> An attack that overwhelms a target with traffic from many sources, making services unavailable.<br><br><strong>Common types:</strong><ul><li><strong>Volumetric:</strong> Floods bandwidth (UDP floods, ICMP floods)</li><li><strong>Protocol:</strong> Exploits protocol weaknesses (SYN floods)</li><li><strong>Application:</strong> Targets specific apps (HTTP floods, Slowloris)</li></ul><strong>Mitigation:</strong> Rate limiting, CDN filtering, anycast networks.` },
+      { keywords: ['zero trust', 'zero-trust'], response: `<strong>Zero Trust Architecture:</strong> A security model based on "never trust, always verify."<br><br><strong>Core principles:</strong><ul><li>Verify <strong>every</strong> access request, regardless of origin</li><li><strong>Least privilege</strong> — minimum necessary access only</li><li><strong>Micro-segmentation</strong> — divide network into small zones</li><li>Continuous <strong>monitoring and validation</strong></li><li>Assume breach — design for compromise</li></ul>` },
+      { keywords: ['soc', 'security operations', 'analyst'], response: `<strong>SOC (Security Operations Center):</strong> A centralized team that monitors, detects, and responds to cybersecurity threats 24/7.<br><br><strong>Analyst responsibilities:</strong><ul><li>Monitor <strong>SIEM</strong> dashboards and security alerts</li><li>Triage incidents by severity and impact</li><li>Perform <strong>threat hunting</strong> and vulnerability analysis</li><li>Create incident reports and playbooks</li><li>Coordinate incident response</li></ul><strong>Tools:</strong> Splunk, Wireshark, Nmap, OSINT frameworks, EDR platforms` },
+      { keywords: ['mfa', '2fa', 'two-factor', 'multi-factor'], response: `<strong>Multi-Factor Authentication (MFA):</strong> Requires 2+ verification methods to prove identity.<br><br><strong>Factor types:</strong><ul><li><strong>Knowledge:</strong> Something you know (password, PIN)</li><li><strong>Possession:</strong> Something you have (phone, hardware token)</li><li><strong>Inherence:</strong> Something you are (fingerprint, face)</li></ul><strong>Best practice:</strong> Use authenticator apps over SMS to prevent SIM-swapping.` },
+      { keywords: ['vulnerability', 'cve', 'exploit'], response: `<strong>Vulnerability Management:</strong><ul><li><strong>CVE:</strong> Common Vulnerabilities and Exposures — standardized IDs for known vulnerabilities</li><li><strong>CVSS:</strong> Common Vulnerability Scoring System — rates severity 0-10</li><li><strong>Exploit:</strong> Code that takes advantage of a vulnerability</li><li><strong>0-day:</strong> Unknown vulnerability with no patch available</li></ul><strong>Process:</strong> Discover → Assess → Prioritize → Remediate → Verify` },
+      { keywords: ['network', 'subnet', 'tcp', 'ip address', 'dns'], response: `<strong>Networking Fundamentals:</strong><ul><li><strong>TCP/IP:</strong> Core protocol suite — TCP (reliable) vs UDP (fast)</li><li><strong>Subnet:</strong> Logical subdivision of an IP network (e.g., 192.168.1.0/24)</li><li><strong>DNS:</strong> Domain Name System — translates hostnames to IP addresses</li><li><strong>DHCP:</strong> Automatically assigns IP addresses to devices</li><li><strong>NAT:</strong> Network Address Translation — maps private to public IPs</li></ul>` }
+    ],
+    john: [
+      { keywords: ['john', 'manganelli', 'who is', 'about john', 'your owner', 'creator'], response: `<strong>John Manganelli</strong> is a <strong>Senior</strong> majoring in <strong>Information Technology</strong>, enrolled in <em>IT Computer Security</em> under <strong>Prof. Xiwang Guo</strong>.<br><br>He has a passion for network engineering, Linux, defensive scripting, and homelab servers. His career goal is to become a <strong>SOC Analyst</strong> or <strong>Incident Response Specialist</strong>.` },
+      { keywords: ['skill', 'skills', 'tools', 'tech', 'technologies'], response: `<strong>John's Technical Skills:</strong><ul><li><strong>Systems:</strong> Linux (Ubuntu, Kali Linux), Bash terminal</li><li><strong>Defensive Tools:</strong> Wireshark (packet analysis), Nmap (port scanning)</li><li><strong>Scripting:</strong> Python for automated log parsing &amp; defense, HTML/CSS</li><li><strong>Virtualization:</strong> Proxmox and VirtualBox isolated test environments</li><li><strong>Networking:</strong> Subnet configuration, firewall testing, isolated lab environments</li></ul>` },
+      { keywords: ['career', 'job', 'goal', 'future'], response: `<strong>Career Goals:</strong><br>John is preparing for roles as a <strong>Security Operations Center (SOC) Analyst</strong> or <strong>Incident Response Specialist</strong>, defending organizations from data breaches and cyberattacks through continuous monitoring, threat detection, and rapid incident containment.` },
+      { keywords: ['hobb', 'guitar', 'game', 'fun', 'free time'], response: `John's hobbies include playing <strong>guitar</strong> and competitive <strong>fighting games</strong>. These activities help him develop quick reflexes, strategic thinking, and stress management — all valuable traits for a cybersecurity professional!` },
+      { keywords: ['homelab', 'lab', 'server', 'fact'], response: `<strong>John's Homelab:</strong><br>He built a dedicated <strong>multi-node physical home lab server</strong> using enterprise hardware to configure isolated virtual subnets, test custom firewalls, and simulate defensive security environments.` },
+      { keywords: ['privacy', 'pii', 'personal info', 'address', 'phone'], response: `<strong>Privacy Policy:</strong> This website intentionally withholds sensitive Personally Identifiable Information (PII) including home address, phone number, passwords, student ID, SSN, and financial details to demonstrate good security hygiene.` }
+    ],
+    site: [
+      { keywords: ['phishshield', 'proposal', 'project', 'academy'], response: `<strong>Project Proposal: PhishShield Academy</strong><br>An interactive educational web sandbox for hands-on dissection of simulated phishing emails, fake login portals, and malicious URLs.<br><br><strong>Key features:</strong><ul><li>Interactive email inspection sandbox</li><li>URL decoder for spoofed lookalike domains</li><li>Scenario-based quizzes with instant feedback</li><li>MFA defense demonstration</li></ul>` },
+      { keywords: ['chatbot', 'cyberbot', 'assistant', 'ai'], response: `<strong>CyberBot (Sentinel-AI)</strong> is the built-in conversational AI assistant on this website. You can ask it questions about cybersecurity, John's portfolio, or general topics. It features voice input/output, multi-turn conversation memory, and markdown rendering.` },
+      { keywords: ['digital person', 'avatar', 'photo', 'upload'], response: `<strong>AI Digital Person</strong> is an interactive feature that lets you upload a photo, generate a digital avatar, and talk to it. The digital person can answer questions, speak responses aloud, and maintain a conversation.` },
+      { keywords: ['assignment', 'course', 'class', 'professor', 'guo'], response: `This website is part of the <strong>IT Computer Security</strong> course taught by <strong>Prof. Xiwang Guo</strong>. It covers authentication &amp; access control, AI chatbot integration, AI digital person creation, and cybersecurity fundamentals.` },
+      { keywords: ['auth', 'login', 'admin', 'user', 'permission'], response: `<strong>Authentication &amp; Access Control</strong> demonstrates:<ul><li><strong>Authentication:</strong> Verifying <em>who you are</em> (login credentials)</li><li><strong>Authorization:</strong> Determining <em>what you can do</em> (role-based permissions)</li></ul><strong>Demo accounts:</strong><br>Admin: <code>admin / admin123</code><br>User: <code>user / user123</code>` }
+    ],
+    general: [
+      { keywords: ['hello', 'hi', 'hey', 'greetings'], response: `Hello! I'm <strong>CyberBot</strong>, the AI assistant for John Manganelli's cybersecurity portfolio. I can help you with:<ul><li>Cybersecurity concepts (phishing, encryption, firewalls, etc.)</li><li>Information about John's skills and background</li><li>Details about this website's features</li><li>General knowledge questions</li></ul>What would you like to know?` },
+      { keywords: ['help', 'what can', 'how', 'guide'], response: `<strong>I can help you with:</strong><ul><li><strong>Cybersecurity:</strong> Phishing, malware, encryption, firewalls, DDoS, VPNs, zero trust, MFA, CVEs</li><li><strong>About John:</strong> Skills, career goals, hobbies, homelab experience</li><li><strong>This Website:</strong> PhishShield proposal, chatbot, digital person, authentication</li><li><strong>Learning:</strong> Certifications, practice labs, study resources</li></ul>Just type your question!` },
+      { keywords: ['thank', 'thanks', 'great', 'awesome', 'cool'], response: `You're welcome! I'm here to help. If you have any other questions about cybersecurity, John's portfolio, or anything else, feel free to ask!` },
+      { keywords: ['bye', 'goodbye', 'see you', 'later'], response: `Goodbye! Thanks for chatting with CyberBot. Stay safe online and keep learning about cybersecurity!` },
+      { keywords: ['joke', 'funny', 'laugh'], response: `Here's a cybersecurity joke:<br><br><em>Why did the security engineer get kicked out of the restaurant?</em><br>They kept trying to authenticate the waiter before letting them take their order! (╯°□°)╯︵ ┻━┻` },
+      { keywords: ['what is cybersecurity', 'define cybersecurity', 'cybersecurity meaning'], response: `<strong>Cybersecurity</strong> is the practice of protecting computer systems, networks, and data from unauthorized access, attacks, damage, or theft.<br><br>The <strong>CIA Triad</strong>:<ul><li><strong>Confidentiality:</strong> Data only accessible to authorized parties</li><li><strong>Integrity:</strong> Data is accurate and unaltered</li><li><strong>Availability:</strong> Systems accessible when needed</li></ul>` },
+      { keywords: ['cia triad', 'confidentiality', 'integrity', 'availability'], response: `<strong>The CIA Triad</strong> — the foundational model of cybersecurity:<ul><li><strong>C — Confidentiality:</strong> Preventing unauthorized access (encryption, access controls)</li><li><strong>I — Integrity:</strong> Ensuring data accuracy (hashing, digital signatures)</li><li><strong>A — Availability:</strong> Ensuring access when needed (redundancy, DDoS protection)</li></ul>` },
+      { keywords: ['how to learn', 'study', 'certification', 'comptia'], response: `<strong>Getting Started in Cybersecurity:</strong><ul><li><strong>Certifications:</strong> CompTIA Security+ → Network+ → CySA+ → CISSP</li><li><strong>Practice:</strong> TryHackMe, Hack The Box, VulnHub, CTF competitions</li><li><strong>Labs:</strong> Build a home lab with virtual machines</li><li><strong>Networking:</strong> Join communities (Reddit r/netsec, BSides)</li><li><strong>Stay current:</strong> Krebs on Security, The Hacker News</li></ul>` },
+      { keywords: ['kaggle', 'dataset', 'data analysis', 'machine learning'], response: `<strong>Cybersecurity + Data Science:</strong> Kaggle offers cybersecurity datasets:<ul><li><strong>Network intrusion:</strong> NSL-KDD, CICIDS2017</li><li><strong>Malware:</strong> Microsoft Malware Classification Challenge</li><li><strong>Phishing URLs:</strong> Phishing Websites Dataset</li><li><strong>Logs:</strong> LANL Cybersecurity Dataset</li></ul>These help ML models learn to detect threats!` }
+    ]
+  };
+
+  function getLocalAIResponse(query) {
+    const q = query.toLowerCase().trim();
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const category of Object.values(KNOWLEDGE_BASE)) {
+      for (const entry of category) {
+        let score = 0;
+        for (const keyword of entry.keywords) {
+          if (q.includes(keyword)) {
+            score += keyword.length;
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = entry;
+        }
+      }
+    }
+
+    if (bestMatch && bestScore > 0) {
+      return bestMatch.response;
+    }
+
+    return `<strong>Interesting question!</strong> I don't have a specific answer for "<em>${escapeHtml(query)}</em>" in my knowledge base, but here's what I can help with:<ul><li><strong>Cybersecurity:</strong> phishing, malware, encryption, firewalls, DDoS, VPNs, zero trust, MFA</li><li><strong>About John:</strong> skills, career, hobbies, homelab</li><li><strong>This website:</strong> PhishShield, chatbot, digital person, authentication</li><li><strong>Learning:</strong> certifications, practice labs, study resources</li></ul>Try asking about one of these topics!`;
+  }
+
+  // Try external API first, fall back to local AI engine
+  async function callFreeAI(prompt) {
     // Method 1: Pollinations GET (most CORS-friendly)
     try {
+      const messages = [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...conversationHistory.slice(-8),
+        { role: "user", content: prompt }
+      ];
       const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
       const encoded = encodeURIComponent(fullPrompt);
       const resp = await fetch(`https://text.pollinations.ai/${encoded}?model=openai`);
@@ -389,37 +462,8 @@ FORMATTING:
       console.warn('Pollinations GET failed:', e.message);
     }
 
-    // Method 2: Pollinations POST
-    try {
-      const resp = await fetch('https://text.pollinations.ai/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, model: 'openai' })
-      });
-      if (resp.ok) {
-        const text = await resp.text();
-        if (text && text.length > 2) return text.trim();
-      }
-    } catch (e) {
-      console.warn('Pollinations POST failed:', e.message);
-    }
-
-    // Method 3: CORS Proxy + Pollinations
-    try {
-      const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
-      const encoded = encodeURIComponent(fullPrompt);
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://text.pollinations.ai/${encoded}?model=openai`)}`;
-      const resp = await fetch(proxyUrl);
-      if (resp.ok) {
-        const text = await resp.text();
-        if (text && text.length > 2 && !text.includes('error')) return text.trim();
-      }
-    } catch (e) {
-      console.warn('CORS proxy failed:', e.message);
-    }
-
-    // All methods failed
-    throw new Error('All AI services unavailable');
+    // Method 2: Local AI engine (always works)
+    return getLocalAIResponse(prompt);
   }
 
   // Optional custom Google Gemini API Key

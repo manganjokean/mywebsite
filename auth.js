@@ -352,20 +352,20 @@
     const canManageContent = hasPermission('manage_content');
 
     dash.innerHTML = `
-      <div class="auth-dash-header">
-        <div class="auth-dash-user">
-          <div class="auth-dash-avatar">${user.fullName ? user.fullName.charAt(0).toUpperCase() : user.username.charAt(0).toUpperCase()}</div>
-          <div class="auth-dash-info">
-            <span class="auth-dash-name">${escapeHtml(user.fullName || user.username)}</span>
-            ${roleBadge}
+      <div class="auth-dash-body">
+        <div class="auth-dash-header">
+          <div class="auth-dash-user">
+            <div class="auth-dash-avatar">${user.fullName ? user.fullName.charAt(0).toUpperCase() : user.username.charAt(0).toUpperCase()}</div>
+            <div class="auth-dash-info">
+              <span class="auth-dash-name">${escapeHtml(user.fullName || user.username)}</span>
+              ${roleBadge}
+            </div>
+          </div>
+          <div class="auth-dash-actions">
+            <button id="auth-dash-back" class="auth-btn auth-btn-secondary">&#x2190; Back to Website</button>
+            <button id="auth-dash-logout" class="auth-btn auth-btn-danger">Logout</button>
           </div>
         </div>
-        <div class="auth-dash-actions">
-          <button id="auth-dash-logout" class="auth-btn auth-btn-danger">Logout</button>
-        </div>
-      </div>
-
-      <div class="auth-dash-body">
         <!-- Authorization Explanation Banner -->
         <div class="auth-info-banner">
           <div class="auth-info-col">
@@ -487,9 +487,19 @@
           </div>` : ''}
         </div>
       </div>
+      </div>
     `;
 
     dash.classList.add('active');
+
+    // Back to Website
+    const backBtn = dash.querySelector('#auth-dash-back');
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        hideDashboard();
+        updateNavAuthState();
+      });
+    }
 
     // Logout
     dash.querySelector('#auth-dash-logout').addEventListener('click', () => {
@@ -548,6 +558,22 @@
         alert('Website content updated!');
       });
     }
+
+    // Close on overlay click (clicking outside dashboard content)
+    dash.addEventListener('click', (e) => {
+      if (e.target === dash) {
+        hideDashboard();
+        updateNavAuthState();
+      }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && dash.classList.contains('active')) {
+        hideDashboard();
+        updateNavAuthState();
+      }
+    });
 
     updateNavAuthState();
   }
